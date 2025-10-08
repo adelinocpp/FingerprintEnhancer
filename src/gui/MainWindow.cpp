@@ -434,6 +434,14 @@ void MainWindow::connectSignals() {
                 CurrentEntityType type = isFragment ? ENTITY_FRAGMENT : ENTITY_IMAGE;
                 setCurrentEntity(entityId, type);
             });
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::viewOriginalRequested,
+            this, &MainWindow::onViewOriginalRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::resetWorkingImageRequested,
+            this, &MainWindow::onResetWorkingRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteFragmentRequested,
+            this, &MainWindow::onDeleteFragmentRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteMinutiaRequested,
+            this, &MainWindow::onDeleteMinutiaRequested);
 
     // Conectar sinais do MinutiaeOverlay
     connect(minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDoubleClicked,
@@ -1891,4 +1899,209 @@ void MainWindow::flipVertical() {
         cv::flip(img, img, 0); // 0 = vertical
     });
     statusLabel->setText("Espelhamento vertical aplicado");
+}
+
+// ========== Handlers do FragmentManager ==========
+
+void MainWindow::onViewOriginalRequested(const QString& entityId, bool isFragment) {
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    cv::Mat originalImage;
+    QString entityName;
+
+    if (isFragment) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(entityId);
+        if (frag) {
+            originalImage = frag->originalImage.clone();
+            entityName = "Fragmento";
+        } else {
+            QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
+            return;
+        }
+    } else {
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(entityId);
+        if (img) {
+            originalImage = img->originalImage.clone();
+            QFileInfo fileInfo(img->originalFilePath);
+            entityName = fileInfo.fileName();
+        } else {
+            QMessageBox::warning(this, "Erro", "Imagem não encontrada");
+            return;
+        }
+    }
+
+    if (originalImage.empty()) {
+        QMessageBox::warning(this, "Erro", "Imagem original vazia");
+        return;
+    }
+
+    // Criar diálogo para mostrar imagem original
+    QDialog* dialog = new QDialog(this);
+    dialog->setWindowTitle(QString("Imagem Original - %1").arg(entityName));
+    dialog->resize(800, 600);
+
+    QVBoxLayout* layout = new QVBoxLayout(dialog);
+
+    ImageViewer* viewer = new ImageViewer(dialog);
+    viewer->setImage(originalImage);
+    viewer->zoomToFit();
+
+    layout->addWidget(viewer);
+
+    QPushButton* closeBtn = new QPushButton("Fechar", dialog);
+    connect(closeBtn, &QPushButton::clicked, dialog, &QDialog::accept);
+    layout->addWidget(closeBtn);
+
+    dialog->setLayout(layout);
+    dialog->exec();
+
+    delete dialog;
+}
+
+void MainWindow::onResetWorkingRequested(const QString& entityId, bool isFragment) {
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Confirmar Reset",
+        "Deseja realmente resetar a imagem de trabalho para a original?\n"
+        "Todos os realces aplicados serão perdidos.",
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    if (isFragment) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(entityId);
+        if (frag) {
+            frag->resetWorkingImage();
+            PM::instance().getCurrentProject()->setModified();
+
+            // Se é a entidade corrente, atualizar visualização
+            if (currentEntityType == ENTITY_FRAGMENT && currentEntityId == entityId) {
+                loadCurrentEntityToView();
+            }
+
+            statusLabel->setText("Fragmento resetado para imagem original");
+        } else {
+            QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
+        }
+    } else {
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(entityId);
+        if (img) {
+            img->resetWorkingImage();
+            PM::instance().getCurrentProject()->setModified();
+
+            // Se é a entidade corrente, atualizar visualização
+            if (currentEntityType == ENTITY_IMAGE && currentEntityId == entityId) {
+                loadCurrentEntityToView();
+            }
+
+            statusLabel->setText("Imagem resetada para original");
+        } else {
+            QMessageBox::warning(this, "Erro", "Imagem não encontrada");
+        }
+    }
+}
+
+void MainWindow::onDeleteFragmentRequested(const QString& fragmentId) {
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(fragmentId);
+    if (!frag) {
+        QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
+        return;
+    }
+
+    int minutiaeCount = frag->getMinutiaeCount();
+
+    QString message = QString("Deseja realmente excluir este fragmento?");
+    if (minutiaeCount > 0) {
+        message += QString("\n\nAVISO: Este fragmento possui %1 minúcia(s) que também serão excluídas!")
+                   .arg(minutiaeCount);
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Confirmar Exclusão",
+        message,
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    QString parentImageId = frag->parentImageId;
+
+    // Se é a entidade corrente, limpar seleção
+    if (currentEntityType == ENTITY_FRAGMENT && currentEntityId == fragmentId) {
+        currentEntityType = ENTITY_NONE;
+        currentEntityId.clear();
+        currentFragmentId.clear();
+        processedImageViewer->clearImage();
+        minutiaeOverlay->setFragment(nullptr);
+    }
+
+    // Remover fragmento da imagem pai
+    FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(parentImageId);
+    if (img) {
+        img->removeFragment(fragmentId);
+        PM::instance().getCurrentProject()->setModified();
+
+        // Atualizar view do gerenciador
+        fragmentManager->updateView();
+
+        statusLabel->setText(QString("Fragmento excluído (%1 minúcia(s) removida(s))").arg(minutiaeCount));
+    }
+}
+
+void MainWindow::onDeleteMinutiaRequested(const QString& minutiaId) {
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    // Encontrar a minúcia no projeto
+    FingerprintEnhancer::Minutia* minutia = PM::instance().getCurrentProject()->findMinutia(minutiaId);
+    if (!minutia) {
+        QMessageBox::warning(this, "Erro", "Minúcia não encontrada");
+        return;
+    }
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Confirmar Exclusão",
+        QString("Deseja realmente excluir esta minúcia?\n\nTipo: %1\nPosição: (%2, %3)")
+            .arg(minutia->getTypeName())
+            .arg(minutia->position.x())
+            .arg(minutia->position.y()),
+        QMessageBox::Yes | QMessageBox::No
+    );
+
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    // Encontrar o fragmento pai e remover a minúcia
+    for (auto& img : PM::instance().getCurrentProject()->images) {
+        for (auto& frag : img.fragments) {
+            FingerprintEnhancer::Minutia* found = frag.findMinutia(minutiaId);
+            if (found) {
+                frag.removeMinutia(minutiaId);
+                PM::instance().getCurrentProject()->setModified();
+
+                // Atualizar visualização se este fragmento está corrente
+                if (currentEntityType == ENTITY_FRAGMENT && currentEntityId == frag.id) {
+                    minutiaeOverlay->clearSelection();
+                    minutiaeOverlay->update();
+                }
+
+                // Atualizar view do gerenciador
+                fragmentManager->updateView();
+
+                statusLabel->setText("Minúcia excluída");
+                return;
+            }
+        }
+    }
 }

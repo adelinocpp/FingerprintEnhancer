@@ -159,20 +159,6 @@ Esta separação permite:
 - **Cálculo de orientação** usando gradientes locais
 - **Avaliação de qualidade** baseada em contraste local
 
-## 📊 Comparação com ImaQuest
-
-| Funcionalidade | ImaQuest | FingerprintEnhancer |
-|---|---|---|
-| FFT Interativa | ✅ | ✅ |
-| Subtração de Fundo | ✅ | ✅ |
-| Extração de Minúcias | ✅ | ✅ |
-| Comparação Lado a Lado | ✅ | ✅ |
-| Trilha de Auditoria | ✅ | ✅ |
-| Código Aberto | ❌ | ✅ |
-| Multiplataforma | ❌ | ✅ |
-| Atualizações Ativas | ❌ | ✅ |
-| Custo | Alto | Gratuito |
-
 ## 🤝 Contribuindo
 
 Contribuições são muito bem-vindas! Por favor:
@@ -203,9 +189,7 @@ Este projeto está licenciado sob a Licença MIT - veja o arquivo [LICENSE](LICE
 
 ## 📞 Suporte
 
-- **Issues**: [GitHub Issues](https://github.com/seu-usuario/FingerprintEnhancer/issues)
-- **Discussões**: [GitHub Discussions](https://github.com/seu-usuario/FingerprintEnhancer/discussions)
-- **Email**: developer@fingerprintenhancer.org
+- **Email**: adelinocpp@yahoo.com
 
 ## 🗺️ Roadmap
 

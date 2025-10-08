@@ -125,6 +125,7 @@ vcpkg_installed/
 *.vcxproj.filters
 *.vcxproj.user
 *.sln
+.vscode
 
 # Xcode
 *.xcodeproj/
