@@ -122,6 +122,19 @@ private slots:
     void rotate180();
     void rotateCustomAngle();
 
+    // Calibração de Escala
+    void calibrateScale();
+    void setScaleManually();
+    void showScaleInfo();
+
+    // Conversão de Espaços de Cor
+    void convertToRGB();
+    void convertToHSV();
+    void convertToHSI();
+    void convertToLab();
+    void convertToGrayscale();
+    void adjustColorLevels();
+
     // Ferramentas de Minúcias
     void activateAddMinutia();
     void activateEditMinutia();

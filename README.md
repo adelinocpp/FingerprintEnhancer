@@ -2,7 +2,7 @@
 
 **Open Source Fingerprint Enhancement Software**
 
-Uma alternativa de código aberto e multiplataforma ao descontinuado "ImaQuest Fingerprint Enhancement Software Suite", desenvolvida em C++ com Qt Framework e OpenCV.
+Uma alternativa de código aberto e multiplataforma para Fingerprint Enhancement, desenvolvida em C++ com Qt Framework e OpenCV.
 
 ## 🎯 Objetivo
 
@@ -20,22 +20,74 @@ O FingerprintEnhancer foi criado para preencher a lacuna deixada pelo ImaQuest, 
 - **Subtração de Fundo** para imagens com iluminação irregular
 - **Filtros Avançados**: Gaussian, Sharpen, CLAHE, Equalização de Histograma
 - **Operações Morfológicas**: Binarização, Esqueletização
-- **Calibração de Escala** para medições precisas
+- **Calibração de Escala** para medições precisas em milímetros
+- **Conversão de Espaços de Cor**: RGB, HSV, HSI, Lab e Escala de Cinza
+- **Transformações Geométricas**: Rotação (90°, 180°, personalizada), Espelhamento horizontal/vertical
+- **Recorte Interativo** com criação de fragmentos
 
 ### Análise de Minúcias
+- **56 Tipos de Minúcias** conforme classificação padrão internacional
+- **Marcação Manual Avançada** com editor visual em tempo real
 - **Extração Automática** usando algoritmo Crossing Number
-- **Marcação Manual** com editor visual interativo
+- **Sistema Hierárquico**: Projeto → Imagens → Fragmentos → Minúcias
+- **Overlay de Minúcias** sincronizado com transformações geométricas
 - **Comparação Lado a Lado** de impressões conhecidas vs. latentes
 - **Geração de Gráficos** (Charting) para apresentação em tribunal
 - **Filtragem de Minúcias Falsas** com algoritmos inteligentes
 
 ### Gestão de Projetos
 - **Cadeia de Custódia Digital** com trilha de auditoria completa
-- **Formato de Projeto Seguro** com verificação de integridade
+- **Sistema de Entidade Corrente**: Trabalho isolado com imagens e fragmentos
+- **Preservação de Originais**: Imagem original sempre preservada
+- **Working Image**: Aplica realces sem destruir o original
+- **Formato de Projeto Seguro** com verificação MD5 de integridade
 - **Exportação de Relatórios** em múltiplos formatos
 - **Histórico Completo** de todas as operações realizadas
+- **Interface em Português** com suporte a múltiplos idiomas
 
 ## 🚀 Início Rápido
+
+### Guia de Uso Básico
+
+1. **Criar um Projeto**
+   - Menu `Arquivo` → `Novo Projeto`
+   - Salve o projeto (Menu `Arquivo` → `Salvar Projeto`)
+
+2. **Adicionar Imagens**
+   - Menu `Arquivo` → `Adicionar Imagem ao Projeto`
+   - Selecione a imagem de impressão digital
+
+3. **Selecionar Entidade para Trabalho**
+   - No painel direito (aba "Projeto"), clique em uma imagem para selecioná-la
+   - Ou clique com botão direito → "Tornar Corrente"
+   - A barra de status mostrará qual entidade está selecionada
+
+4. **Aplicar Realces**
+   - Menu `Realce` → Escolha o filtro desejado (FFT, CLAHE, etc.)
+   - A imagem original é sempre preservada
+   - Use `Editar` → `Restaurar Original` para desfazer
+
+5. **Criar Fragmentos**
+   - Com uma imagem selecionada, ative `Ferramentas` → `Recorte de Imagem` → `Ativar Ferramenta de Recorte`
+   - Desenhe o retângulo de seleção
+   - Clique direito → `Aplicar Recorte`
+   - O fragmento aparecerá no painel do projeto
+
+6. **Adicionar Minúcias**
+   - Selecione um fragmento no painel do projeto
+   - Clique direito na imagem → `Adicionar Minúcia Aqui`
+   - Escolha o tipo de minúcia (56 tipos disponíveis)
+   - Ajuste ângulo e posição conforme necessário
+
+7. **Calibrar Escala**
+   - Menu `Ferramentas` → `Calibração de Escala` → `Calibrar Escala`
+   - Informe a distância conhecida em milímetros
+   - Meça a distância em pixels na imagem
+
+8. **Transformações Geométricas**
+   - Rotação: `Ferramentas` → `Rotação de Imagem`
+   - Espelhamento: `Ferramentas` → `Espelhamento`
+   - Conversão de Cor: `Ferramentas` → `Espaço de Cor`
 
 ### Pré-requisitos
 

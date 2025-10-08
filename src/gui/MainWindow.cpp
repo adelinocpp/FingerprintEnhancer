@@ -1,6 +1,7 @@
 #include "MainWindow.h"
 #include "ProcessingWorker.h"
 #include "RotationDialog.h"
+#include "MinutiaEditDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -149,6 +150,22 @@ void MainWindow::createMenus() {
     QMenu *flipMenu = toolsMenu->addMenu("&Espelhamento");
     flipMenu->addAction("Espelhar &Horizontal", this, &MainWindow::flipHorizontal, QKeySequence("Ctrl+H"));
     flipMenu->addAction("Espelhar &Vertical", this, &MainWindow::flipVertical, QKeySequence("Ctrl+Shift+V"));
+
+    // Submenu de Calibração de Escala
+    QMenu *scaleMenu = toolsMenu->addMenu("&Calibração de Escala");
+    scaleMenu->addAction("&Calibrar Escala...", this, &MainWindow::calibrateScale);
+    scaleMenu->addAction("&Definir Escala Manualmente...", this, &MainWindow::setScaleManually);
+    scaleMenu->addAction("&Informações de Escala", this, &MainWindow::showScaleInfo);
+
+    // Submenu de Conversão de Espaço de Cor
+    QMenu *colorMenu = toolsMenu->addMenu("Espaço de &Cor");
+    colorMenu->addAction("Converter para &RGB", this, &MainWindow::convertToRGB);
+    colorMenu->addAction("Converter para &HSV", this, &MainWindow::convertToHSV);
+    colorMenu->addAction("Converter para H&SI", this, &MainWindow::convertToHSI);
+    colorMenu->addAction("Converter para &Lab", this, &MainWindow::convertToLab);
+    colorMenu->addAction("Converter para &Escala de Cinza", this, &MainWindow::convertToGrayscale, QKeySequence("Ctrl+Shift+G"));
+    colorMenu->addSeparator();
+    colorMenu->addAction("&Ajustar Níveis de Cor...", this, &MainWindow::adjustColorLevels);
 
     // Submenu de Minúcias
     QMenu *minutiaeMenu = toolsMenu->addMenu("&Minúcias");
@@ -425,6 +442,10 @@ void MainWindow::connectSignals() {
     connect(&PM::instance(), &PM::minutiaAdded, this, &MainWindow::onMinutiaAdded);
 
     // Conectar sinais do FragmentManager
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::imageSelected,
+            [this](const QString& imageId) {
+                setCurrentEntity(imageId, ENTITY_IMAGE);
+            });
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::fragmentSelected,
             this, &MainWindow::onFragmentSelected);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::minutiaSelected,
@@ -744,52 +765,180 @@ void MainWindow::onThresholdChanged(int value) {
 }
 
 // Implementações básicas dos outros slots (a serem expandidas)
-void MainWindow::openFFTDialog() { statusLabel->setText("FFT Dialog opened"); }
-void MainWindow::subtractBackground() { statusLabel->setText("Background subtracted"); }
-void MainWindow::applyGaussianBlur() { statusLabel->setText("Gaussian blur applied"); }
-void MainWindow::applySharpenFilter() { statusLabel->setText("Sharpen filter applied"); }
-void MainWindow::adjustBrightnessContrast() { statusLabel->setText("Brightness/Contrast adjusted"); }
-void MainWindow::equalizeHistogram() { statusLabel->setText("Histogram equalized"); }
-void MainWindow::applyCLAHE() { statusLabel->setText("CLAHE applied"); }
-void MainWindow::invertColors() { statusLabel->setText("Colors inverted"); }
-void MainWindow::rotateImage() { statusLabel->setText("Image rotated"); }
+void MainWindow::openFFTDialog() {
+    // TODO: Criar diálogo completo para FFT com visualização de frequências
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        // Converter para escala de cinza se necessário
+        cv::Mat gray;
+        if (img.channels() > 1) {
+            cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+        } else {
+            gray = img.clone();
+        }
+
+        // Aplicar FFT com filtro passa-alta básico
+        cv::Mat padded;
+        int m = cv::getOptimalDFTSize(gray.rows);
+        int n = cv::getOptimalDFTSize(gray.cols);
+        cv::copyMakeBorder(gray, padded, 0, m - gray.rows, 0, n - gray.cols, cv::BORDER_CONSTANT, cv::Scalar::all(0));
+
+        cv::Mat planes[] = {cv::Mat_<float>(padded), cv::Mat::zeros(padded.size(), CV_32F)};
+        cv::Mat complexI;
+        cv::merge(planes, 2, complexI);
+        cv::dft(complexI, complexI);
+
+        // Filtro passa-alta para remover ruído de baixa frequência
+        cv::Mat filter = cv::Mat::ones(complexI.size(), CV_32F);
+        int cx = filter.cols / 2;
+        int cy = filter.rows / 2;
+        int radius = 30;
+        cv::circle(filter, cv::Point(cx, cy), radius, cv::Scalar(0), -1);
+        cv::Mat planes2[2];
+        cv::split(complexI, planes2);
+        planes2[0] = planes2[0].mul(filter);
+        planes2[1] = planes2[1].mul(filter);
+        cv::merge(planes2, 2, complexI);
+
+        cv::idft(complexI, complexI);
+        cv::split(complexI, planes);
+        cv::normalize(planes[0], img, 0, 255, cv::NORM_MINMAX);
+        img.convertTo(img, CV_8U);
+        img = img(cv::Rect(0, 0, gray.cols, gray.rows));
+    });
+    statusLabel->setText("FFT aplicado para remoção de ruído");
+}
+
+void MainWindow::subtractBackground() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        cv::Mat gray;
+        if (img.channels() > 1) {
+            cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+        } else {
+            gray = img.clone();
+        }
+
+        // Estimar fundo com filtro morfológico
+        cv::Mat background;
+        cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(51, 51));
+        cv::morphologyEx(gray, background, cv::MORPH_CLOSE, kernel);
+
+        // Subtrair fundo
+        cv::subtract(background, gray, img);
+    });
+    statusLabel->setText("Fundo subtraído");
+}
+
+void MainWindow::applyGaussianBlur() {
+    // TODO: Criar diálogo para escolher sigma
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        cv::GaussianBlur(img, img, cv::Size(5, 5), 1.5);
+    });
+    statusLabel->setText("Filtro Gaussiano aplicado");
+}
+
+void MainWindow::applySharpenFilter() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        cv::Mat kernel = (cv::Mat_<float>(3, 3) <<
+            0, -1, 0,
+            -1, 5, -1,
+            0, -1, 0);
+        cv::filter2D(img, img, -1, kernel);
+    });
+    statusLabel->setText("Filtro de nitidez aplicado");
+}
+void MainWindow::adjustBrightnessContrast() {
+    // TODO: Criar diálogo para ajustar parâmetros
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        double alpha = 1.2; // contraste
+        double beta = 10;   // brilho
+        img.convertTo(img, -1, alpha, beta);
+    });
+    statusLabel->setText("Brilho/Contraste ajustados");
+}
+
+void MainWindow::equalizeHistogram() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() == 1) {
+            cv::equalizeHist(img, img);
+        } else {
+            cv::Mat ycrcb;
+            cv::cvtColor(img, ycrcb, cv::COLOR_BGR2YCrCb);
+            std::vector<cv::Mat> channels;
+            cv::split(ycrcb, channels);
+            cv::equalizeHist(channels[0], channels[0]);
+            cv::merge(channels, ycrcb);
+            cv::cvtColor(ycrcb, img, cv::COLOR_YCrCb2BGR);
+        }
+    });
+    statusLabel->setText("Histograma equalizado");
+}
+
+void MainWindow::applyCLAHE() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+        if (img.channels() == 1) {
+            clahe->apply(img, img);
+        } else {
+            cv::Mat lab;
+            cv::cvtColor(img, lab, cv::COLOR_BGR2Lab);
+            std::vector<cv::Mat> channels;
+            cv::split(lab, channels);
+            clahe->apply(channels[0], channels[0]);
+            cv::merge(channels, lab);
+            cv::cvtColor(lab, img, cv::COLOR_Lab2BGR);
+        }
+    });
+    statusLabel->setText("CLAHE aplicado");
+}
+
+void MainWindow::invertColors() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        cv::bitwise_not(img, img);
+    });
+    statusLabel->setText("Cores invertidas");
+}
+
+void MainWindow::rotateImage() {
+    rotateCustomAngle();
+}
+
 void MainWindow::binarizeImage() {
-    if (!imageProcessor->isImageLoaded() || isProcessing) return;
-    showProcessingProgress("Binarizing");
-    imageProcessor->binarizeImage();
-    updateImageDisplay();
-    hideProcessingProgress();
-    statusLabel->setText("Image binarized");
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() > 1) {
+            cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
+        }
+        cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+    });
+    statusLabel->setText("Imagem binarizada (Otsu)");
 }
 
 void MainWindow::skeletonizeImage() {
-    if (!imageProcessor->isImageLoaded() || isProcessing) return;
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        // Garantir imagem binária
+        if (img.channels() > 1) {
+            cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
+        }
+        cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
 
-    // Esqueletização é pesada, usar thread
-    runProcessingInThread([](const cv::Mat& input, int& progress) -> cv::Mat {
-        cv::Mat skeleton = cv::Mat::zeros(input.size(), CV_8UC1);
+        // Algoritmo de esqueletização
+        cv::Mat skeleton = cv::Mat::zeros(img.size(), CV_8UC1);
         cv::Mat temp, eroded;
         cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
-        cv::Mat img = input.clone();
+        cv::Mat working = img.clone();
 
-        int maxIter = 100;
-        int iter = 0;
         bool done = false;
-
-        while (!done && iter < maxIter) {
-            cv::erode(img, eroded, element);
+        while (!done) {
+            cv::erode(working, eroded, element);
             cv::dilate(eroded, temp, element);
-            cv::subtract(img, temp, temp);
+            cv::subtract(working, temp, temp);
             cv::bitwise_or(skeleton, temp, skeleton);
-            eroded.copyTo(img);
-
-            done = (cv::countNonZero(img) == 0);
-            iter++;
-            progress = (iter * 100) / maxIter;
+            eroded.copyTo(working);
+            done = (cv::countNonZero(working) == 0);
         }
 
-        return skeleton;
+        skeleton.copyTo(img);
     });
+    statusLabel->setText("Imagem esqueletizada");
 }
 
 void MainWindow::extractMinutiae() {
@@ -1166,6 +1315,147 @@ void MainWindow::rotateCustomAngle() {
     }
 }
 
+// ==================== CALIBRAÇÃO DE ESCALA ====================
+
+void MainWindow::calibrateScale() {
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Calibração", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
+
+    bool ok;
+    double distance = QInputDialog::getDouble(this, "Calibração de Escala",
+        "Insira a distância conhecida em milímetros\n"
+        "(você será solicitado a marcar esta distância na imagem):",
+        10.0, 0.1, 1000.0, 2, &ok);
+
+    if (!ok) return;
+
+    QMessageBox::information(this, "Calibração",
+        "Clique em dois pontos na imagem para marcar a distância conhecida.\n"
+        "Use o modo de medição para fazer isso.");
+
+    // TODO: Implementar seleção interativa de dois pontos
+    // Por agora, usar input manual
+    double pixelDistance = QInputDialog::getDouble(this, "Calibração de Escala",
+        "Insira a distância em pixels medida na imagem:",
+        100.0, 1.0, 10000.0, 2, &ok);
+
+    if (!ok) return;
+
+    double scale = pixelDistance / distance; // pixels por mm
+    imageProcessor->setScale(scale);
+
+    statusLabel->setText(QString("Escala calibrada: %1 pixels/mm").arg(scale, 0, 'f', 2));
+}
+
+void MainWindow::setScaleManually() {
+    bool ok;
+    double scale = QInputDialog::getDouble(this, "Definir Escala",
+        "Insira a escala em pixels por milímetro:",
+        imageProcessor->getScale(), 0.01, 1000.0, 2, &ok);
+
+    if (ok) {
+        imageProcessor->setScale(scale);
+        statusLabel->setText(QString("Escala definida: %1 pixels/mm").arg(scale, 0, 'f', 2));
+    }
+}
+
+void MainWindow::showScaleInfo() {
+    double scale = imageProcessor->getScale();
+    if (scale > 0) {
+        QMessageBox::information(this, "Informação de Escala",
+            QString("Escala atual: %1 pixels/mm\n"
+                    "Resolução: %2 DPI")
+                .arg(scale, 0, 'f', 2)
+                .arg(scale * 25.4, 0, 'f', 0)); // 1 inch = 25.4 mm
+    } else {
+        QMessageBox::information(this, "Informação de Escala",
+            "Nenhuma escala foi calibrada ainda.");
+    }
+}
+
+// ==================== CONVERSÃO DE ESPAÇOS DE COR ====================
+
+void MainWindow::convertToRGB() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() == 1) {
+            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+        } else if (img.channels() == 4) {
+            cv::cvtColor(img, img, cv::COLOR_BGRA2BGR);
+        }
+        // Se já está em BGR (RGB do OpenCV), não fazer nada
+    });
+    statusLabel->setText("Convertido para RGB");
+}
+
+void MainWindow::convertToHSV() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() == 1) {
+            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+        }
+        if (img.channels() == 3) {
+            cv::cvtColor(img, img, cv::COLOR_BGR2HSV);
+        }
+    });
+    statusLabel->setText("Convertido para HSV");
+}
+
+void MainWindow::convertToHSI() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() == 1) {
+            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+        }
+        if (img.channels() == 3) {
+            // OpenCV não tem conversão direta para HSI
+            // Converter para HSV e modificar canal V para I (Intensity)
+            cv::Mat hsv;
+            cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
+
+            // Calcular Intensity como média dos canais BGR
+            std::vector<cv::Mat> bgrChannels;
+            cv::split(img, bgrChannels);
+            cv::Mat intensity = (bgrChannels[0] + bgrChannels[1] + bgrChannels[2]) / 3;
+
+            // Substituir canal V por I
+            std::vector<cv::Mat> hsiChannels;
+            cv::split(hsv, hsiChannels);
+            hsiChannels[2] = intensity;
+
+            cv::merge(hsiChannels, img);
+        }
+    });
+    statusLabel->setText("Convertido para HSI (aproximado)");
+}
+
+void MainWindow::convertToLab() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() == 1) {
+            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+        }
+        if (img.channels() == 3) {
+            cv::cvtColor(img, img, cv::COLOR_BGR2Lab);
+        }
+    });
+    statusLabel->setText("Convertido para Lab");
+}
+
+void MainWindow::convertToGrayscale() {
+    applyOperationToCurrentEntity([](cv::Mat& img) {
+        if (img.channels() > 1) {
+            cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
+        }
+    });
+    statusLabel->setText("Convertido para escala de cinza");
+}
+
+void MainWindow::adjustColorLevels() {
+    // TODO: Criar diálogo para ajuste de níveis por canal
+    QMessageBox::information(this, "Ajuste de Níveis",
+        "Funcionalidade em desenvolvimento.\n"
+        "Em breve você poderá ajustar níveis individuais de cada canal de cor.");
+}
+
 // ==================== MENU DE CONTEXTO E MINÚCIAS ====================
 
 void MainWindow::showContextMenu(const QPoint &pos) {
@@ -1175,16 +1465,17 @@ void MainWindow::showContextMenu(const QPoint &pos) {
     // Menu baseado no modo de ferramenta ativa
     switch (currentToolMode) {
         case TOOL_NONE:
-            // Menu genérico
-            if (!currentImageId.isEmpty()) {
-                contextMenu.addAction("Destacar Imagem Inteira como Fragmento",
+            // Menu genérico baseado na entidade corrente
+            if (currentEntityType == ENTITY_IMAGE) {
+                contextMenu.addAction("📐 Destacar Imagem Inteira como Fragmento",
                                      this, &MainWindow::createFragmentFromWholeImage);
-            }
-            if (!currentFragmentId.isEmpty()) {
-                contextMenu.addAction("Adicionar Minúcia Aqui", [this, imagePos]() {
+            } else if (currentEntityType == ENTITY_FRAGMENT) {
+                contextMenu.addAction("➕ Adicionar Minúcia Aqui", [this, imagePos]() {
                     setToolMode(TOOL_ADD_MINUTIA);
                     addMinutiaAtPosition(imagePos);
                 });
+            } else {
+                contextMenu.addAction("Selecione uma imagem ou fragmento primeiro");
             }
             break;
 
@@ -1201,7 +1492,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             break;
 
         case TOOL_ADD_MINUTIA:
-            if (!currentFragmentId.isEmpty()) {
+            if (currentEntityType == ENTITY_FRAGMENT) {
                 contextMenu.addAction("➕ Adicionar Minúcia Aqui", [this, imagePos]() {
                     addMinutiaAtPosition(imagePos);
                 });
@@ -1214,7 +1505,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             contextMenu.addAction("Clique em uma minúcia para editar");
             contextMenu.addSeparator();
             contextMenu.addAction("Adicionar Nova Minúcia", [this, imagePos]() {
-                if (!currentFragmentId.isEmpty()) {
+                if (currentEntityType == ENTITY_FRAGMENT) {
                     addMinutiaAtPosition(imagePos);
                 }
             });
@@ -1237,26 +1528,58 @@ void MainWindow::showContextMenu(const QPoint &pos) {
 void MainWindow::addMinutiaAtPosition(const QPoint &imagePos) {
     using PM = FingerprintEnhancer::ProjectManager;
 
-    if (currentFragmentId.isEmpty()) {
-        QMessageBox::warning(this, "Erro", "Nenhum fragmento selecionado");
+    // Verificar se há um fragmento selecionado usando o novo sistema
+    if (currentEntityType != ENTITY_FRAGMENT || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Erro", "Nenhum fragmento selecionado.\n"
+                                          "Selecione um fragmento no painel Projeto antes de adicionar minúcias.");
         return;
     }
 
-    // Adicionar minúcia ao fragmento no projeto
-    FingerprintEnhancer::Minutia* minutia = PM::instance().addMinutiaToFragment(
-        currentFragmentId,
-        imagePos,
-        MinutiaeType::OTHER
-    );
+    // Criar minúcia temporária para edição
+    FingerprintEnhancer::Minutia tempMinutia("", "", imagePos, MinutiaeType::RIDGE_ENDING, 0.0f, 1.0f);
 
-    if (minutia) {
-        statusLabel->setText(QString("Minúcia adicionada em (%1, %2)")
-                            .arg(imagePos.x()).arg(imagePos.y()));
-    } else {
-        QMessageBox::warning(this, "Erro", "Falha ao adicionar minúcia");
+    // Abrir diálogo para escolher tipo e configurar
+    FingerprintEnhancer::MinutiaEditDialog dialog(&tempMinutia, this);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        // Obter valores do diálogo
+        QPoint finalPos = dialog.getPosition();
+        MinutiaeType type = dialog.getType();
+        float angle = dialog.getAngle();
+        float quality = dialog.getQuality();
+        QString notes = dialog.getNotes();
+
+        // Adicionar minúcia ao fragmento no projeto
+        FingerprintEnhancer::Minutia* minutia = PM::instance().addMinutiaToFragment(
+            currentEntityId,  // Usar currentEntityId em vez de currentFragmentId
+            finalPos,
+            type,
+            angle,
+            quality
+        );
+
+        if (minutia) {
+            if (!notes.isEmpty()) {
+                minutia->notes = notes;
+            }
+
+            statusLabel->setText(QString("Minúcia %1 adicionada em (%2, %3)")
+                                .arg(getMinutiaeTypeName(type))
+                                .arg(finalPos.x()).arg(finalPos.y()));
+
+            // Atualizar overlay
+            FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+            if (frag) {
+                minutiaeOverlay->setFragment(frag);
+                minutiaeOverlay->update();
+            }
+
+            // Atualizar view do gerenciador
+            fragmentManager->updateView();
+        } else {
+            QMessageBox::warning(this, "Erro", "Falha ao adicionar minúcia");
+        }
     }
-
-    // Nota: O overlay já será atualizado via signal onMinutiaAdded
 
     // Código legado abaixo - manter comentado para referência
     /*
@@ -1783,9 +2106,28 @@ void MainWindow::setCurrentEntity(const QString& entityId, CurrentEntityType typ
     // Carregar entidade na visualização
     loadCurrentEntityToView();
 
-    // Atualizar status
-    QString entityTypeName = (type == ENTITY_IMAGE) ? "Imagem" : "Fragmento";
-    statusLabel->setText(QString("%1 selecionada como corrente").arg(entityTypeName));
+    // Atualizar status com informações detalhadas
+    QString statusMsg;
+    if (type == ENTITY_IMAGE) {
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(entityId);
+        if (img) {
+            QFileInfo fileInfo(img->originalFilePath);
+            statusMsg = QString("🖼️ Imagem Corrente: %1").arg(fileInfo.fileName());
+        }
+    } else if (type == ENTITY_FRAGMENT) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(entityId);
+        if (frag) {
+            int minutiaeCount = frag->getMinutiaeCount();
+            statusMsg = QString("📐 Fragmento Corrente: %1x%2 pixels (%3 minúcia(s))")
+                .arg(frag->workingImage.cols)
+                .arg(frag->workingImage.rows)
+                .arg(minutiaeCount);
+        }
+    }
+
+    if (!statusMsg.isEmpty()) {
+        statusLabel->setText(statusMsg);
+    }
 }
 
 void MainWindow::loadCurrentEntityToView() {
