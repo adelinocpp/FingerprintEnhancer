@@ -1,0 +1,176 @@
+# Build directories
+build/
+build-*/
+bin/
+lib/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Qt specific
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+Makefile*
+*build-*
+
+# Qt Creator
+CMakeLists.txt.user*
+
+# VSCode
+.vscode/settings.json.user
+.vscode/launch.json.user
+.vscode/tasks.json.user
+
+# Temporary files
+*~
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Generated documentation
+docs/html/
+docs/latex/
+docs/generated/
+
+# Test files
+test_images/
+temp_images/
+
+# IDE files
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+
+# Conan
+conanfile.txt.user
+conaninfo.txt
+conanbuildinfo.*
+
+# vcpkg
+vcpkg_installed/
+
+# CLion
+.idea/
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# Compile commands (for clangd)
+compile_commands.json
+
+# Coverage files
+*.gcov
+*.gcda
+*.gcno
+coverage.info
+coverage/
+
+# Profiling files
+*.prof
+gmon.out
+
+# Valgrind files
+*.valgrind
+
+# Core dumps
+core
+core.*
+
+# Project specific
+assets/temp/
+exports/
+projects/test_*
+
+# Claude
+.claude
+
+# other dirs
+assets
+docs
+Pappers
+resources
+scripts
+translations
+
+# Other files
+*.fpe
+CHANGELOG.md
+CMakeLists.txt
+INSTALL.md
+Makefile
+TESTE_COMPLETO_RESULTADO.md
