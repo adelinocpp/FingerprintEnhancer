@@ -38,6 +38,7 @@ signals:
     void minutiaSelected(const QString& minutiaId);
 
     void createFragmentRequested(const QString& imageId);
+    void editMinutiaRequested(const QString& minutiaId);
     void deleteFragmentRequested(const QString& fragmentId);
     void deleteMinutiaRequested(const QString& minutiaId);
 

@@ -282,8 +282,9 @@ void MainWindow::createCentralWidget() {
     minutiaeOverlay = new FingerprintEnhancer::MinutiaeOverlay(viewerContainer);
     stackedLayout->addWidget(minutiaeOverlay);
 
-    // Configurar overlay para ser transparente e passar eventos de mouse quando necessário
-    minutiaeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    // Configurar overlay para ser transparente e passar eventos de mouse
+    // IMPORTANTE: true = passa eventos para o widget abaixo (processedImageViewer)
+    minutiaeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     minutiaeOverlay->setStyleSheet("background-color: transparent;");
 
     // Layout: imagem original pequena (200px) e imagem processada grande (com overlay)
@@ -461,6 +462,8 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onResetWorkingRequested);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteFragmentRequested,
             this, &MainWindow::onDeleteFragmentRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::editMinutiaRequested,
+            this, &MainWindow::onMinutiaDoubleClicked);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteMinutiaRequested,
             this, &MainWindow::onDeleteMinutiaRequested);
 
@@ -469,6 +472,10 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onMinutiaDoubleClicked);
     connect(minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
             this, &MainWindow::onMinutiaPositionChanged);
+
+    // Conectar sinal de zoom do ImageViewer ao MinutiaeOverlay
+    connect(processedImageViewer, &ImageViewer::zoomChanged,
+            minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScaleFactor);
 }
 
 void MainWindow::updateWindowTitle() {
@@ -724,7 +731,8 @@ void MainWindow::onContrastChanged(int value) {
 }
 
 void MainWindow::onGaussianSigmaChanged(double value) {
-    if (!imageProcessor->isImageLoaded() || isProcessing) return;
+    if (isProcessing) return;
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) return;
 
     runProcessingInThread([value](const cv::Mat& input, int& progress) -> cv::Mat {
         progress = 50;
@@ -736,7 +744,8 @@ void MainWindow::onGaussianSigmaChanged(double value) {
 }
 
 void MainWindow::onSharpenStrengthChanged(double value) {
-    if (!imageProcessor->isImageLoaded() || isProcessing) return;
+    if (isProcessing) return;
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) return;
 
     runProcessingInThread([value](const cv::Mat& input, int& progress) -> cv::Mat {
         progress = 50;
@@ -1005,15 +1014,23 @@ void MainWindow::changeLanguage() {
 }
 
 void MainWindow::applyBrightnessContrastRealtime() {
-    if (!imageProcessor->isImageLoaded() || isProcessing) return;
+    if (isProcessing) return;
+
+    // Verificar se há uma entidade selecionada
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        return;
+    }
 
     double brightness = brightnessSlider->value();
     double contrast = contrastSlider->value() / 100.0;
 
-    // Aplicar temporariamente sem adicionar ao histórico
-    cv::Mat original = imageProcessor->getOriginalImage();
+    // Obter a imagem de trabalho da entidade atual (imagem ou fragmento)
+    cv::Mat& workingImage = getCurrentWorkingImage();
+    if (workingImage.empty()) return;
+
+    // Aplicar temporariamente sem modificar o workingImage
     cv::Mat result;
-    original.convertTo(result, -1, contrast, brightness);
+    workingImage.convertTo(result, -1, contrast, brightness);
 
     processedImageViewer->setImage(result);
 }
@@ -1025,8 +1042,15 @@ void MainWindow::runProcessingInThread(std::function<cv::Mat(const cv::Mat&, int
         return;
     }
 
-    if (!imageProcessor->isImageLoaded()) {
-        QMessageBox::warning(this, "No Image", "Please load an image first.");
+    // Verificar se há uma entidade selecionada
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "No Image", "Please select an image or fragment first.");
+        return;
+    }
+
+    cv::Mat& workingImage = getCurrentWorkingImage();
+    if (workingImage.empty()) {
+        QMessageBox::warning(this, "No Image", "Working image is empty.");
         return;
     }
 
@@ -1038,9 +1062,9 @@ void MainWindow::runProcessingInThread(std::function<cv::Mat(const cv::Mat&, int
     processingWorker = new ProcessingWorker();
     processingWorker->moveToThread(processingThread);
 
-    // Configurar worker
+    // Configurar worker - usar a imagem de trabalho da entidade atual
     processingWorker->setCustomOperation(processingFunc);
-    processingWorker->setInputImage(imageProcessor->getCurrentImage());
+    processingWorker->setInputImage(workingImage);
 
     // Conectar sinais
     connect(processingThread, &QThread::started, processingWorker, &ProcessingWorker::process);
@@ -1066,11 +1090,17 @@ void MainWindow::onProcessingProgress(int percentage) {
 void MainWindow::onProcessingCompleted(cv::Mat result) {
     // Atualizar imagem processada
     if (!result.empty()) {
-        // Copiar resultado para o ImageProcessor
-        cv::Mat current = imageProcessor->getCurrentImage();
-        result.copyTo(current);
+        // Copiar resultado para a workingImage da entidade atual
+        cv::Mat& workingImage = getCurrentWorkingImage();
+        result.copyTo(workingImage);
 
-        updateImageDisplay();
+        // Recarregar visualização
+        loadCurrentEntityToView();
+
+        // Marcar projeto como modificado
+        using PM = FingerprintEnhancer::ProjectManager;
+        PM::instance().getCurrentProject()->setModified();
+
         statusLabel->setText("Processing completed successfully");
     }
 
@@ -1462,6 +1492,12 @@ void MainWindow::showContextMenu(const QPoint &pos) {
     QMenu contextMenu("Menu", this);
     QPoint imagePos = processedImageViewer->widgetToImage(pos);
 
+    // DEBUG: Log do estado atual
+    qDebug() << "showContextMenu called:";
+    qDebug() << "  currentToolMode:" << currentToolMode;
+    qDebug() << "  currentEntityType:" << currentEntityType;
+    qDebug() << "  currentEntityId:" << currentEntityId;
+
     // Menu baseado no modo de ferramenta ativa
     switch (currentToolMode) {
         case TOOL_NONE:
@@ -1470,9 +1506,12 @@ void MainWindow::showContextMenu(const QPoint &pos) {
                 contextMenu.addAction("📐 Destacar Imagem Inteira como Fragmento",
                                      this, &MainWindow::createFragmentFromWholeImage);
             } else if (currentEntityType == ENTITY_FRAGMENT) {
-                contextMenu.addAction("➕ Adicionar Minúcia Aqui", [this, imagePos]() {
+                contextMenu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
                     setToolMode(TOOL_ADD_MINUTIA);
                     addMinutiaAtPosition(imagePos);
+                });
+                contextMenu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
+                    addMinutiaQuickly(imagePos);
                 });
             } else {
                 contextMenu.addAction("Selecione uma imagem ou fragmento primeiro");
@@ -1493,8 +1532,11 @@ void MainWindow::showContextMenu(const QPoint &pos) {
 
         case TOOL_ADD_MINUTIA:
             if (currentEntityType == ENTITY_FRAGMENT) {
-                contextMenu.addAction("➕ Adicionar Minúcia Aqui", [this, imagePos]() {
+                contextMenu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
                     addMinutiaAtPosition(imagePos);
+                });
+                contextMenu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
+                    addMinutiaQuickly(imagePos);
                 });
             } else {
                 contextMenu.addAction("Selecione um fragmento primeiro");
@@ -1535,8 +1577,26 @@ void MainWindow::addMinutiaAtPosition(const QPoint &imagePos) {
         return;
     }
 
-    // Criar minúcia temporária para edição
-    FingerprintEnhancer::Minutia tempMinutia("", "", imagePos, MinutiaeType::RIDGE_ENDING, 0.0f, 1.0f);
+    // Obter dimensões do fragmento para validação
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) {
+        QMessageBox::warning(this, "Erro", "Imagem inválida");
+        return;
+    }
+
+    // Validar posição dentro dos limites da imagem
+    if (imagePos.x() < 0 || imagePos.x() >= workingImg.cols ||
+        imagePos.y() < 0 || imagePos.y() >= workingImg.rows) {
+        QMessageBox::warning(this, "Posição Inválida",
+            QString("A posição (%1, %2) está fora dos limites da imagem.\n"
+                    "Limites: 0 a %3 (largura), 0 a %4 (altura)")
+                .arg(imagePos.x()).arg(imagePos.y())
+                .arg(workingImg.cols - 1).arg(workingImg.rows - 1));
+        return;
+    }
+
+    // Criar minúcia temporária para edição - tipo padrão: OTHER (Não Classificada)
+    FingerprintEnhancer::Minutia tempMinutia(imagePos, MinutiaeType::OTHER);
 
     // Abrir diálogo para escolher tipo e configurar
     FingerprintEnhancer::MinutiaEditDialog dialog(&tempMinutia, this);
@@ -1549,22 +1609,24 @@ void MainWindow::addMinutiaAtPosition(const QPoint &imagePos) {
         float quality = dialog.getQuality();
         QString notes = dialog.getNotes();
 
-        // Adicionar minúcia ao fragmento no projeto
+        // Adicionar minúcia ao fragmento no projeto (método só aceita 3 parâmetros)
         FingerprintEnhancer::Minutia* minutia = PM::instance().addMinutiaToFragment(
             currentEntityId,  // Usar currentEntityId em vez de currentFragmentId
             finalPos,
-            type,
-            angle,
-            quality
+            type
         );
 
         if (minutia) {
+            // Atualizar ângulo e qualidade manualmente
+            minutia->angle = angle;
+            minutia->quality = quality;
+
             if (!notes.isEmpty()) {
                 minutia->notes = notes;
             }
 
             statusLabel->setText(QString("Minúcia %1 adicionada em (%2, %3)")
-                                .arg(getMinutiaeTypeName(type))
+                                .arg(MinutiaeTypeInfo::getTypeName(type))
                                 .arg(finalPos.x()).arg(finalPos.y()));
 
             // Atualizar overlay
@@ -1580,80 +1642,70 @@ void MainWindow::addMinutiaAtPosition(const QPoint &imagePos) {
             QMessageBox::warning(this, "Erro", "Falha ao adicionar minúcia");
         }
     }
+}
 
-    // Código legado abaixo - manter comentado para referência
-    /*
-    // Adicionar minúcia na posição
-    markedMinutiae.append(imagePos);
-    minutiaeTypes.append("Não classificada");
+void MainWindow::addMinutiaQuickly(const QPoint &imagePos) {
+    using PM = FingerprintEnhancer::ProjectManager;
 
-    // Atualizar lista
-    minutiaeList->addItem(QString("Minúcia #%1 - Posição: (%2, %3) - Tipo: Não classificada")
-        .arg(markedMinutiae.size())
-        .arg(imagePos.x())
-        .arg(imagePos.y()));
-
-    // Redesenhar imagem com a minúcia marcada
-    if (imageProcessor && imageProcessor->isImageLoaded()) {
-        cv::Mat currentImg = imageProcessor->getCurrentImage().clone();
-
-        // Desenhar círculo com X para todas as minúcias
-        for (int i = 0; i < markedMinutiae.size(); ++i) {
-            QPoint pt = markedMinutiae[i];
-            cv::Point center(pt.x(), pt.y());
-
-            // Círculo
-            cv::circle(currentImg, center, 10, cv::Scalar(0, 0, 255), 2);
-
-            // X (duas linhas cruzadas)
-            cv::line(currentImg,
-                    cv::Point(center.x - 7, center.y - 7),
-                    cv::Point(center.x + 7, center.y + 7),
-                    cv::Scalar(0, 0, 255), 2);
-            cv::line(currentImg,
-                    cv::Point(center.x + 7, center.y - 7),
-                    cv::Point(center.x - 7, center.y + 7),
-                    cv::Scalar(0, 0, 255), 2);
-
-            // Número
-            cv::putText(currentImg, std::to_string(i + 1),
-                       cv::Point(center.x + 15, center.y - 15),
-                       cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                       cv::Scalar(255, 0, 0), 2);
-        }
-
-        processedImageViewer->setImage(currentImg);
+    // Verificar se há um fragmento selecionado
+    if (currentEntityType != ENTITY_FRAGMENT || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Erro", "Nenhum fragmento selecionado");
+        return;
     }
 
-    statusLabel->setText(QString("Minúcia #%1 adicionada na posição (%2, %3)")
-        .arg(markedMinutiae.size())
-        .arg(imagePos.x())
-        .arg(imagePos.y()));
-    */
+    // Validar posição
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) return;
+
+    if (imagePos.x() < 0 || imagePos.x() >= workingImg.cols ||
+        imagePos.y() < 0 || imagePos.y() >= workingImg.rows) {
+        QMessageBox::warning(this, "Posição Inválida",
+            "A posição está fora dos limites da imagem");
+        return;
+    }
+
+    // Adicionar minúcia diretamente como OTHER (Não Classificada)
+    FingerprintEnhancer::Minutia* minutia = PM::instance().addMinutiaToFragment(
+        currentEntityId,
+        imagePos,
+        MinutiaeType::OTHER
+    );
+
+    if (minutia) {
+        statusLabel->setText(QString("Minúcia não classificada #%1 adicionada em (%2, %3) - Edite depois")
+                            .arg(minutia->id.right(8))
+                            .arg(imagePos.x()).arg(imagePos.y()));
+
+        // Atualizar overlay
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (frag) {
+            minutiaeOverlay->setFragment(frag);
+            minutiaeOverlay->update();
+        }
+
+        // Atualizar view do gerenciador
+        fragmentManager->updateView();
+    }
 }
 
 // ==================== FERRAMENTAS DE MINÚCIAS ====================
 
 void MainWindow::activateAddMinutia() {
-    if (!minutiaeMarker) {
-        minutiaeMarker = new MinutiaeMarkerWidget(this);
-        // TODO: Integrar com a interface principal
+    // Verificar se há um fragmento selecionado
+    if (currentEntityType != ENTITY_FRAGMENT) {
+        QMessageBox::information(this, "Adicionar Minúcia",
+            "Para adicionar minúcias, você precisa primeiro:\n\n"
+            "1. Criar um fragmento (recorte de uma imagem)\n"
+            "2. Selecionar o fragmento no painel Projeto (clique nele)\n"
+            "3. Depois use:\n"
+            "   • Menu Ferramentas → Minúcias → Adicionar Minúcia Manual\n"
+            "   • OU clique com botão direito na imagem → 'Adicionar Minúcia Aqui'");
+        return;
     }
 
-    // Diálogo para selecionar tipo de minúcia
-    QStringList types = MinutiaeTypeInfo::getAllTypeNames();
-    bool ok;
-    QString selectedType = QInputDialog::getItem(this,
-        "Tipo de Minúcia",
-        "Selecione o tipo de minúcia a adicionar:",
-        types, 0, false, &ok);
-
-    if (ok) {
-        MinutiaeType type = MinutiaeTypeInfo::getTypeFromName(selectedType);
-        minutiaeMarker->setCurrentMinutiaeType(type);
-        minutiaeMarker->setMode(MinutiaeMarkerWidget::Mode::AddMinutia);
-        statusLabel->setText("Modo: Adicionar Minúcia (" + selectedType + "). Clique na imagem.");
-    }
+    // Ativar modo de adição de minúcias
+    setToolMode(TOOL_ADD_MINUTIA);
+    statusLabel->setText("✚ Modo: Adicionar Minúcia ATIVO. Clique com BOTÃO DIREITO na posição desejada e escolha 'Adicionar Minúcia Aqui'.");
 }
 
 void MainWindow::activateEditMinutia() {

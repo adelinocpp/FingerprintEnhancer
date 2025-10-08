@@ -167,6 +167,7 @@ private slots:
     // Menu de contexto
     void showContextMenu(const QPoint &pos);
     void addMinutiaAtPosition(const QPoint &imagePos);
+    void addMinutiaQuickly(const QPoint &imagePos); // Inserção rápida sem diálogo
 
     // Função auxiliar
     cv::Mat rotateImagePreservingSize(const cv::Mat &image, double angle);

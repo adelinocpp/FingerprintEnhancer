@@ -416,6 +416,9 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
         }
     } else if (itemType == "MINUTIA") {
         menu.addAction("ℹ Informações", this, &FragmentManager::onShowMinutiaInfo);
+        menu.addAction("✏️ Editar Minúcia", [this, entityId]() {
+            emit editMinutiaRequested(entityId);
+        });
         menu.addAction("🗑 Excluir Minúcia", [this, entityId]() {
             emit deleteMinutiaRequested(entityId);
         });
