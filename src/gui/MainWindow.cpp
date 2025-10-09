@@ -15,6 +15,7 @@
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QScrollBar>
 #include <QtGui/QActionGroup>
+#include <QtGui/QMouseEvent>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QDir>
 #include <QtCore/QThread>
@@ -28,6 +29,11 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , imageProcessor(new ImageProcessor())
     , minutiaeExtractor(new MinutiaeExtractor())
+    , processedImageViewer(nullptr)
+    , secondImageViewer(nullptr)
+    , leftMinutiaeOverlay(nullptr)
+    , rightMinutiaeOverlay(nullptr)
+    , activePanel(false)
     , cropTool(nullptr)
     , minutiaeMarker(nullptr)
     , afisMatcher(nullptr)
@@ -35,6 +41,8 @@ MainWindow::MainWindow(QWidget *parent)
     , fragmentManager(nullptr)
     , minutiaeOverlay(nullptr)
     , currentEntityType(ENTITY_NONE)
+    , leftPanelEntityType(ENTITY_NONE)
+    , rightPanelEntityType(ENTITY_NONE)
     , currentToolMode(TOOL_NONE)
     , sideBySideMode(true)
     , updateTimer(new QTimer(this))
@@ -209,6 +217,16 @@ void MainWindow::createToolBars() {
     mainToolBar->addAction("Ampliar", this, &MainWindow::zoomIn);
     mainToolBar->addAction("Reduzir", this, &MainWindow::zoomOut);
     mainToolBar->addAction("Ajustar", this, &MainWindow::zoomFit);
+    mainToolBar->addSeparator();
+
+    // Adicionar botões de controle de painéis
+    QAction *switchPanelAction = mainToolBar->addAction("◀▶ Chavear Painel");
+    connect(switchPanelAction, &QAction::triggered, this, &MainWindow::switchActivePanel);
+
+    QAction *toggleRightPanelAction = mainToolBar->addAction("👁 Painel Direito");
+    toggleRightPanelAction->setCheckable(true);
+    toggleRightPanelAction->setChecked(false);  // Inicia oculto
+    connect(toggleRightPanelAction, &QAction::triggered, this, &MainWindow::toggleRightViewer);
 
     // Toolbar de ferramentas
     QToolBar *toolsToolBar = addToolBar("Ferramentas");
@@ -256,39 +274,64 @@ void MainWindow::createStatusBar() {
     statusBar()->addPermanentWidget(progressBar);
 }
 
+QWidget* MainWindow::createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay) {
+    QWidget *container = new QWidget();
+    QStackedLayout *stackedLayout = new QStackedLayout(container);
+    stackedLayout->setStackingMode(QStackedLayout::StackAll);
+
+    stackedLayout->addWidget(viewer);
+    stackedLayout->addWidget(overlay);
+
+    // Configurar overlay para ser transparente e passar eventos de mouse
+    overlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    overlay->setStyleSheet("background-color: transparent;");
+
+    return container;
+}
+
 void MainWindow::createCentralWidget() {
     centralWidget = new QWidget();
     setCentralWidget(centralWidget);
 
+    // Inicializar controle de painel ativo
+    activePanel = false;  // Começa com painel esquerdo ativo
+
     // Layout principal com splitter horizontal
     mainSplitter = new QSplitter(Qt::Horizontal);
 
-    // Área de imagens no centro
-    // Visualizadores de imagem
+    // Criar dois visualizadores de imagem
     processedImageViewer = new ImageViewer();
+    secondImageViewer = new ImageViewer();
     minutiaeEditor = new MinutiaeEditor();
 
-    // Criar overlay de minúcias - será um widget sobreposto ao viewer
-    // Precisamos criar um container com stacked layout para overlay funcionar
-    QWidget *viewerContainer = new QWidget();
-    QStackedLayout *stackedLayout = new QStackedLayout(viewerContainer);
-    stackedLayout->setStackingMode(QStackedLayout::StackAll);
+    // Criar overlays para cada painel
+    leftMinutiaeOverlay = new FingerprintEnhancer::MinutiaeOverlay(nullptr);
+    rightMinutiaeOverlay = new FingerprintEnhancer::MinutiaeOverlay(nullptr);
 
-    stackedLayout->addWidget(processedImageViewer);
+    // Criar containers para cada visualizador com seu overlay
+    leftViewerContainer = createViewerContainer(processedImageViewer, leftMinutiaeOverlay);
+    rightViewerContainer = createViewerContainer(secondImageViewer, rightMinutiaeOverlay);
 
-    minutiaeOverlay = new FingerprintEnhancer::MinutiaeOverlay(viewerContainer);
-    stackedLayout->addWidget(minutiaeOverlay);
+    // Manter referência ao overlay antigo para compatibilidade
+    minutiaeOverlay = leftMinutiaeOverlay;
 
-    // Configurar overlay para ser transparente e passar eventos de mouse
-    // IMPORTANTE: true = passa eventos para o widget abaixo (processedImageViewer)
-    minutiaeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    minutiaeOverlay->setStyleSheet("background-color: transparent;");
+    // Criar splitter para os dois painéis de visualização
+    viewerSplitter = new QSplitter(Qt::Horizontal);
+    viewerSplitter->addWidget(leftViewerContainer);
+    viewerSplitter->addWidget(rightViewerContainer);
+    viewerSplitter->setSizes({500, 500});
 
-    // Adicionar viewer direto ao mainSplitter (sem imagem pequena)
-    mainSplitter->addWidget(viewerContainer);
+    // Adicionar splitter de visualização diretamente ao splitter principal
+    mainSplitter->addWidget(viewerSplitter);
 
     // Esconder o minutiaeEditor por padrão (será usado depois)
     minutiaeEditor->hide();
+
+    // Ocultar painel direito por padrão
+    rightViewerContainer->hide();
+
+    // Definir painel esquerdo como ativo visualmente
+    leftViewerContainer->setStyleSheet("border: 2px solid #4CAF50;");
 
     // Layout principal
     QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
@@ -426,10 +469,18 @@ void MainWindow::connectSignals() {
     connect(compareButton, &QPushButton::clicked, this, &MainWindow::compareMinutiae);
     connect(chartButton, &QPushButton::clicked, this, &MainWindow::generateChart);
 
-    // Configurar menu de contexto no viewer processado
+    // Configurar menus de contexto nos visualizadores
     processedImageViewer->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(processedImageViewer, &QWidget::customContextMenuRequested,
-            this, &MainWindow::showContextMenu);
+            [this](const QPoint& pos) { showViewerContextMenu(pos, true); });
+
+    secondImageViewer->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(secondImageViewer, &QWidget::customContextMenuRequested,
+            [this](const QPoint& pos) { showViewerContextMenu(pos, false); });
+
+    // Instalar filtros de eventos para detectar cliques e trocar foco
+    processedImageViewer->installEventFilter(this);
+    secondImageViewer->installEventFilter(this);
 
     // Conectar sinais do ProjectManager (singleton)
     using PM = FingerprintEnhancer::ProjectManager;
@@ -462,24 +513,45 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onMinutiaDoubleClicked);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteMinutiaRequested,
             this, &MainWindow::onDeleteMinutiaRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::sendToLeftPanelRequested,
+            [this](const QString& entityId, bool isFragment) {
+                CurrentEntityType type = isFragment ? ENTITY_FRAGMENT : ENTITY_IMAGE;
+                loadEntityToPanel(entityId, type, false);  // false = painel esquerdo
+            });
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::sendToRightPanelRequested,
+            [this](const QString& entityId, bool isFragment) {
+                CurrentEntityType type = isFragment ? ENTITY_FRAGMENT : ENTITY_IMAGE;
+                loadEntityToPanel(entityId, type, true);   // true = painel direito
+            });
 
-    // Conectar sinais do MinutiaeOverlay
-    connect(minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDoubleClicked,
+    // Conectar sinais dos MinutiaeOverlays
+    connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDoubleClicked,
             this, &MainWindow::onMinutiaDoubleClicked);
-    connect(minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
+    connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
+            this, &MainWindow::onMinutiaPositionChanged);
+    connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDoubleClicked,
+            this, &MainWindow::onMinutiaDoubleClicked);
+    connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
             this, &MainWindow::onMinutiaPositionChanged);
 
-    // Conectar sinal de zoom do ImageViewer ao MinutiaeOverlay
+    // Manter compatibilidade com overlay antigo
+    minutiaeOverlay = leftMinutiaeOverlay;
+
+    // Conectar sinais de zoom/scroll do painel esquerdo
     connect(processedImageViewer, &ImageViewer::zoomChanged,
-            minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScaleFactor);
-
-    // Conectar sinal de scroll do ImageViewer ao MinutiaeOverlay
+            leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScaleFactor);
     connect(processedImageViewer, &ImageViewer::scrollChanged,
-            minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScrollOffset);
-
-    // Conectar sinal de offset de imagem do ImageViewer ao MinutiaeOverlay
+            leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScrollOffset);
     connect(processedImageViewer, &ImageViewer::imageOffsetChanged,
-            minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setImageOffset);
+            leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setImageOffset);
+
+    // Conectar sinais de zoom/scroll do painel direito
+    connect(secondImageViewer, &ImageViewer::zoomChanged,
+            rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScaleFactor);
+    connect(secondImageViewer, &ImageViewer::scrollChanged,
+            rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScrollOffset);
+    connect(secondImageViewer, &ImageViewer::imageOffsetChanged,
+            rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setImageOffset);
 }
 
 void MainWindow::updateWindowTitle() {
@@ -699,6 +771,32 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     } else {
         event->ignore();
     }
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // Detectar clique esquerdo nos visualizadores para trocar foco
+    if (event->type() == QEvent::MouseButtonPress) {
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+
+        // Apenas processar clique esquerdo
+        if (mouseEvent->button() == Qt::LeftButton) {
+            // Verificar se o clique foi em um dos visualizadores
+            if (obj == processedImageViewer) {
+                // Clicou no painel esquerdo
+                if (activePanel) {  // Se painel direito está ativo
+                    setActivePanel(false);  // Mudar para esquerdo
+                }
+            } else if (obj == secondImageViewer) {
+                // Clicou no painel direito (só trocar se estiver visível)
+                if (rightViewerContainer->isVisible() && !activePanel) {  // Se painel esquerdo está ativo e direito visível
+                    setActivePanel(true);  // Mudar para direito
+                }
+            }
+        }
+    }
+
+    // Continuar processamento normal do evento
+    return QMainWindow::eventFilter(obj, event);
 }
 
 bool MainWindow::checkUnsavedChanges() {
@@ -954,10 +1052,10 @@ void MainWindow::extractMinutiae() {
 }
 void MainWindow::compareMinutiae() { statusLabel->setText("Minutiae compared"); }
 void MainWindow::generateChart() { statusLabel->setText("Chart generated"); }
-void MainWindow::zoomIn() { processedImageViewer->zoomIn(); }
-void MainWindow::zoomOut() { processedImageViewer->zoomOut(); }
-void MainWindow::zoomFit() { processedImageViewer->zoomToFit(); }
-void MainWindow::zoomActual() { processedImageViewer->zoomToActual(); }
+void MainWindow::zoomIn() { getActiveViewer()->zoomIn(); }
+void MainWindow::zoomOut() { getActiveViewer()->zoomOut(); }
+void MainWindow::zoomFit() { getActiveViewer()->zoomToFit(); }
+void MainWindow::zoomActual() { getActiveViewer()->zoomToActual(); }
 void MainWindow::toggleSideBySide() { sideBySideMode = !sideBySideMode; }
 
 void MainWindow::toggleRightPanel() {
@@ -967,6 +1065,282 @@ void MainWindow::toggleRightPanel() {
         rightPanel->show();
     }
 }
+
+// ========== GERENCIAMENTO DE PAINÉIS DUAIS ==========
+
+void MainWindow::switchActivePanel() {
+    activePanel = !activePanel;
+
+    // Se estiver alternando para o painel direito e ele estiver oculto, mostrá-lo
+    if (activePanel && !rightViewerContainer->isVisible()) {
+        toggleRightViewer();
+    }
+
+    // Atualizar aparência visual dos containers
+    if (activePanel) {
+        leftViewerContainer->setStyleSheet("");
+        rightViewerContainer->setStyleSheet("border: 2px solid #4CAF50;");
+    } else {
+        leftViewerContainer->setStyleSheet("border: 2px solid #4CAF50;");
+        rightViewerContainer->setStyleSheet("");
+    }
+
+    // Atualizar entidade corrente para refletir o painel ativo
+    updateActivePanelEntity();
+}
+
+void MainWindow::toggleRightViewer() {
+    if (rightViewerContainer->isVisible()) {
+        rightViewerContainer->hide();
+
+        // Se estava ativo, voltar para o esquerdo
+        if (activePanel) {
+            activePanel = false;
+            leftViewerContainer->setStyleSheet("border: 2px solid #4CAF50;");
+            rightViewerContainer->setStyleSheet("");
+            updateActivePanelEntity();
+        }
+    } else {
+        rightViewerContainer->show();
+    }
+}
+
+void MainWindow::setActivePanel(bool rightPanel) {
+    if (activePanel != rightPanel) {
+        switchActivePanel();
+    }
+}
+
+ImageViewer* MainWindow::getActiveViewer() {
+    return activePanel ? secondImageViewer : processedImageViewer;
+}
+
+FingerprintEnhancer::MinutiaeOverlay* MainWindow::getActiveOverlay() {
+    return activePanel ? rightMinutiaeOverlay : leftMinutiaeOverlay;
+}
+
+void MainWindow::updateActivePanelEntity() {
+    if (activePanel) {
+        // Painel direito ativo
+        currentEntityType = rightPanelEntityType;
+        currentEntityId = rightPanelEntityId;
+        minutiaeOverlay = rightMinutiaeOverlay;
+    } else {
+        // Painel esquerdo ativo
+        currentEntityType = leftPanelEntityType;
+        currentEntityId = leftPanelEntityId;
+        minutiaeOverlay = leftMinutiaeOverlay;
+    }
+
+    // Atualizar informações na barra de status
+    if (!currentEntityId.isEmpty()) {
+        statusLabel->setText(QString("Painel %1 ativo: %2")
+            .arg(activePanel ? "direito" : "esquerdo")
+            .arg(currentEntityType == ENTITY_IMAGE ? "Imagem" : "Fragmento"));
+    }
+}
+
+void MainWindow::loadEntityToPanel(const QString& entityId, CurrentEntityType type, bool targetPanel) {
+    using PM = FingerprintEnhancer::ProjectManager;
+    if (!PM::instance().hasOpenProject()) return;
+
+    FingerprintEnhancer::Project* project = PM::instance().getCurrentProject();
+    if (!project) return;
+
+    ImageViewer* targetViewer = targetPanel ? secondImageViewer : processedImageViewer;
+    FingerprintEnhancer::MinutiaeOverlay* targetOverlay = targetPanel ? rightMinutiaeOverlay : leftMinutiaeOverlay;
+
+    // Atualizar informações do painel
+    if (targetPanel) {
+        rightPanelEntityType = type;
+        rightPanelEntityId = entityId;
+    } else {
+        leftPanelEntityType = type;
+        leftPanelEntityId = entityId;
+    }
+
+    // Carregar imagem apropriada
+    cv::Mat imageToShow;
+    FingerprintEnhancer::Fragment* fragment = nullptr;
+
+    if (type == ENTITY_IMAGE) {
+        FingerprintEnhancer::FingerprintImage* img = project->findImage(entityId);
+        if (img) {
+            imageToShow = img->workingImage.clone();
+        }
+    } else if (type == ENTITY_FRAGMENT) {
+        fragment = project->findFragment(entityId);
+        if (fragment) {
+            imageToShow = fragment->workingImage.clone();
+        }
+    }
+
+    if (!imageToShow.empty()) {
+        // Converter para QPixmap e exibir
+        QImage qimg;
+        if (imageToShow.channels() == 1) {
+            qimg = QImage(imageToShow.data, imageToShow.cols, imageToShow.rows,
+                         imageToShow.step, QImage::Format_Grayscale8).copy();
+        } else {
+            cv::Mat rgb;
+            cv::cvtColor(imageToShow, rgb, cv::COLOR_BGR2RGB);
+            qimg = QImage(rgb.data, rgb.cols, rgb.rows,
+                         rgb.step, QImage::Format_RGB888).copy();
+        }
+
+        targetViewer->setPixmap(QPixmap::fromImage(qimg));
+
+        // Configurar overlay se for fragmento
+        if (type == ENTITY_FRAGMENT && fragment) {
+            targetOverlay->setFragment(fragment);
+            targetOverlay->setScaleFactor(targetViewer->getScaleFactor());
+
+            // Inicializar scroll offset
+            QPoint scrollOffset(targetViewer->horizontalScrollBar()->value(),
+                               targetViewer->verticalScrollBar()->value());
+            targetOverlay->setScrollOffset(scrollOffset);
+
+            // Inicializar image offset (centralização)
+            targetOverlay->setImageOffset(targetViewer->getImageOffset());
+        } else {
+            targetOverlay->setFragment(nullptr);
+        }
+
+        targetOverlay->update();
+    }
+
+    // Se enviou para painel ativo, atualizar entidade corrente
+    if (targetPanel == activePanel) {
+        updateActivePanelEntity();
+    }
+}
+
+void MainWindow::clearActivePanel() {
+    ImageViewer* viewer = getActiveViewer();
+    FingerprintEnhancer::MinutiaeOverlay* overlay = getActiveOverlay();
+
+    viewer->clearImage();
+    overlay->setFragment(nullptr);
+    overlay->update();
+
+    // Limpar informações da entidade do painel ativo
+    if (activePanel) {
+        rightPanelEntityType = ENTITY_NONE;
+        rightPanelEntityId.clear();
+    } else {
+        leftPanelEntityType = ENTITY_NONE;
+        leftPanelEntityId.clear();
+    }
+
+    updateActivePanelEntity();
+    statusLabel->setText(QString("Painel %1 limpo").arg(activePanel ? "direito" : "esquerdo"));
+}
+
+void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
+    QMenu menu(this);
+
+    ImageViewer* viewer = isLeftPanel ? processedImageViewer : secondImageViewer;
+    bool isPanelActive = (isLeftPanel && !activePanel) || (!isLeftPanel && activePanel);
+
+    // Se este painel é o ativo, mostrar menu de operações de imagem
+    if (isPanelActive) {
+        QPoint imagePos = viewer->widgetToImage(pos);
+
+        // Menu baseado no modo de ferramenta ativa
+        switch (currentToolMode) {
+            case TOOL_NONE:
+                // Menu genérico baseado na entidade corrente
+                if (currentEntityType == ENTITY_IMAGE) {
+                    menu.addAction("📐 Destacar Imagem Inteira como Fragmento",
+                                         this, &MainWindow::createFragmentFromWholeImage);
+                } else if (currentEntityType == ENTITY_FRAGMENT) {
+                    menu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
+                        setToolMode(TOOL_ADD_MINUTIA);
+                        addMinutiaAtPosition(imagePos);
+                    });
+                    menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
+                        addMinutiaQuickly(imagePos);
+                    });
+                }
+                break;
+
+            case TOOL_CROP:
+                if (viewer->hasCropSelection()) {
+                    menu.addAction("✓ Aplicar Recorte", this, &MainWindow::applyCrop);
+                    menu.addAction("Ajustar Seleção", this, &MainWindow::onCropAdjust);
+                    menu.addAction("Mover Seleção", this, &MainWindow::onCropMove);
+                    menu.addSeparator();
+                    menu.addAction("✗ Cancelar Recorte", this, &MainWindow::cancelCropSelection);
+                } else {
+                    menu.addAction("Desenhe uma área para recortar");
+                }
+                break;
+
+            case TOOL_ADD_MINUTIA:
+                if (currentEntityType == ENTITY_FRAGMENT) {
+                    menu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
+                        addMinutiaAtPosition(imagePos);
+                    });
+                    menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
+                        addMinutiaQuickly(imagePos);
+                    });
+                }
+                break;
+
+            case TOOL_EDIT_MINUTIA:
+                menu.addAction("Clique em uma minúcia para editar");
+                menu.addSeparator();
+                menu.addAction("Adicionar Nova Minúcia", [this, imagePos]() {
+                    if (currentEntityType == ENTITY_FRAGMENT) {
+                        addMinutiaAtPosition(imagePos);
+                    }
+                });
+                break;
+
+            case TOOL_REMOVE_MINUTIA:
+                menu.addAction("Clique em uma minúcia para remover");
+                break;
+
+            case TOOL_PAN:
+                menu.addAction("Modo Pan ativo");
+                break;
+        }
+
+        if (menu.actions().count() > 0) {
+            menu.addSeparator();
+        }
+    }
+
+    // Opções de controle de painéis (sempre disponíveis)
+
+    // Opção para tornar este painel ativo (se não for o ativo)
+    if (!isPanelActive) {
+        menu.addAction("🎯 Tornar Este Painel Ativo", [this, isLeftPanel]() {
+            setActivePanel(!isLeftPanel);  // false = esquerdo, true = direito
+        });
+    }
+
+    // Opção para limpar painel (apenas se for o ativo)
+    if (isPanelActive) {
+        menu.addAction("🗑 Limpar Este Painel", this, &MainWindow::clearActivePanel);
+    }
+
+    // Opção para ocultar painel direito (apenas no painel direito quando visível)
+    if (!isLeftPanel && rightViewerContainer->isVisible()) {
+        menu.addAction("👁 Ocultar Painel Direito", this, &MainWindow::toggleRightViewer);
+    }
+
+    // Mostrar painel direito (apenas no painel esquerdo quando direito está oculto)
+    if (isLeftPanel && !rightViewerContainer->isVisible()) {
+        menu.addAction("👁 Mostrar Painel Direito", this, &MainWindow::toggleRightViewer);
+    }
+
+    if (!menu.isEmpty()) {
+        menu.exec(viewer->mapToGlobal(pos));
+    }
+}
+
+// ========== FIM GERENCIAMENTO DE PAINÉIS DUAIS ==========
 
 void MainWindow::showProcessingProgress(const QString &operation) {
     Q_UNUSED(operation);
@@ -1125,9 +1499,9 @@ void MainWindow::onProcessingStatus(QString message) {
 // ==================== FERRAMENTAS DE RECORTE ====================
 
 void MainWindow::activateCropTool() {
-    // Desativar modo de recorte na imagem original (não usamos ela para recorte)
-    // Ativar modo de recorte na imagem processada
-    processedImageViewer->setCropMode(true);
+    // Ativar modo de recorte no visualizador ativo
+    ImageViewer* activeViewer = getActiveViewer();
+    activeViewer->setCropMode(true);
 
     statusLabel->setText("Ferramenta de recorte ativada. Clique e arraste para selecionar uma área.");
 }
@@ -1135,7 +1509,9 @@ void MainWindow::activateCropTool() {
 void MainWindow::applyCrop() {
     using PM = FingerprintEnhancer::ProjectManager;
 
-    if (!processedImageViewer->hasCropSelection()) {
+    ImageViewer* activeViewer = getActiveViewer();
+
+    if (!activeViewer->hasCropSelection()) {
         QMessageBox::warning(this, "Recorte", "Nenhuma área selecionada.");
         return;
     }
@@ -1147,7 +1523,7 @@ void MainWindow::applyCrop() {
     }
 
     // Obter retângulo de seleção
-    QRect selection = processedImageViewer->getCropSelection();
+    QRect selection = activeViewer->getCropSelection();
 
     // Validar seleção
     if (selection.width() < 10 || selection.height() < 10) {
@@ -1203,8 +1579,8 @@ void MainWindow::applyCrop() {
     PM::instance().getCurrentProject()->setModified();
 
     // Desativar modo de recorte
-    processedImageViewer->clearCropSelection();
-    processedImageViewer->setCropMode(false);
+    activeViewer->clearCropSelection();
+    activeViewer->setCropMode(false);
     setToolMode(TOOL_NONE);
 
     // Atualizar visualização no gerenciador ANTES de selecionar
@@ -1218,13 +1594,16 @@ void MainWindow::applyCrop() {
 }
 
 void MainWindow::cancelCropSelection() {
-    processedImageViewer->clearCropSelection();
-    processedImageViewer->setCropMode(false);
+    ImageViewer* activeViewer = getActiveViewer();
+    activeViewer->clearCropSelection();
+    activeViewer->setCropMode(false);
     statusLabel->setText("Seleção cancelada.");
 }
 
 void MainWindow::saveCroppedImage() {
-    if (!processedImageViewer->hasCropSelection()) {
+    ImageViewer* activeViewer = getActiveViewer();
+
+    if (!activeViewer->hasCropSelection()) {
         QMessageBox::warning(this, "Salvar Recorte", "Nenhuma área selecionada.");
         return;
     }
@@ -1241,7 +1620,7 @@ void MainWindow::saveCroppedImage() {
     }
 
     // Obter retângulo de seleção e recortar
-    QRect selection = processedImageViewer->getCropSelection();
+    QRect selection = activeViewer->getCropSelection();
     cv::Rect cropRect(selection.x(), selection.y(), selection.width(), selection.height());
     cv::Mat cropped = currentImg(cropRect).clone();
     if (cropped.empty()) {
@@ -1359,8 +1738,11 @@ void MainWindow::rotateCustomAngle() {
         return;
     }
 
+    // Usar visualizador do painel ativo
+    ImageViewer* activeViewer = getActiveViewer();
+
     // Criar diálogo de rotação em tempo real
-    RotationDialog dialog(workingImg, processedImageViewer, this);
+    RotationDialog dialog(workingImg, activeViewer, this);
     int result = dialog.exec();
 
     if (result == QDialog::Accepted && dialog.wasAccepted()) {
@@ -2061,33 +2443,41 @@ void MainWindow::onMinutiaPositionChanged(const QString& minutiaId, const QPoint
 void MainWindow::setToolMode(ToolMode mode) {
     currentToolMode = mode;
 
-    // Desativar todos os modos primeiro
+    // Desativar todos os modos em ambos os viewers
     processedImageViewer->setCropMode(false);
-    minutiaeOverlay->setEditMode(false);
+    secondImageViewer->setCropMode(false);
 
-    // Ativar o modo selecionado
+    // Desativar edit mode em ambos os overlays
+    leftMinutiaeOverlay->setEditMode(false);
+    rightMinutiaeOverlay->setEditMode(false);
+
+    // Obter viewer e overlay ativos
+    ImageViewer* activeViewer = getActiveViewer();
+    FingerprintEnhancer::MinutiaeOverlay* activeOverlay = getActiveOverlay();
+
+    // Ativar o modo selecionado apenas no painel ativo
     switch (mode) {
         case TOOL_NONE:
             statusLabel->setText("Ferramenta: Nenhuma (navegação)");
             break;
 
         case TOOL_CROP:
-            processedImageViewer->setCropMode(true);
+            activeViewer->setCropMode(true);
             statusLabel->setText("Ferramenta: Recortar - Clique e arraste para selecionar área");
             break;
 
         case TOOL_ADD_MINUTIA:
-            minutiaeOverlay->setEditMode(false);
+            activeOverlay->setEditMode(false);
             statusLabel->setText("Ferramenta: Adicionar Minúcia - Clique para marcar posição");
             break;
 
         case TOOL_EDIT_MINUTIA:
-            minutiaeOverlay->setEditMode(true);
+            activeOverlay->setEditMode(true);
             statusLabel->setText("Ferramenta: Editar Minúcia - Clique para selecionar, arraste para mover");
             break;
 
         case TOOL_REMOVE_MINUTIA:
-            minutiaeOverlay->setEditMode(false);
+            activeOverlay->setEditMode(false);
             statusLabel->setText("Ferramenta: Remover Minúcia - Clique na minúcia para remover");
             break;
 
@@ -2098,12 +2488,14 @@ void MainWindow::setToolMode(ToolMode mode) {
 }
 
 void MainWindow::onCropAdjust() {
-    if (!processedImageViewer->hasCropSelection()) {
+    ImageViewer* activeViewer = getActiveViewer();
+
+    if (!activeViewer->hasCropSelection()) {
         QMessageBox::information(this, "Info", "Nenhuma seleção de recorte ativa");
         return;
     }
 
-    QRect currentSelection = processedImageViewer->getCropSelection();
+    QRect currentSelection = activeViewer->getCropSelection();
 
     // Dialog para ajustar manualmente as coordenadas
     QDialog dialog(this);
@@ -2143,7 +2535,7 @@ void MainWindow::onCropAdjust() {
             widthSpinBox->value(),
             heightSpinBox->value()
         );
-        processedImageViewer->setCropSelection(newSelection);
+        activeViewer->setCropSelection(newSelection);
         statusLabel->setText(QString("Seleção ajustada: %1x%2 em (%3,%4)")
             .arg(newSelection.width()).arg(newSelection.height())
             .arg(newSelection.x()).arg(newSelection.y()));
@@ -2151,12 +2543,14 @@ void MainWindow::onCropAdjust() {
 }
 
 void MainWindow::onCropMove() {
-    if (!processedImageViewer->hasCropSelection()) {
+    ImageViewer* activeViewer = getActiveViewer();
+
+    if (!activeViewer->hasCropSelection()) {
         QMessageBox::information(this, "Info", "Nenhuma seleção de recorte ativa");
         return;
     }
 
-    QRect currentSelection = processedImageViewer->getCropSelection();
+    QRect currentSelection = activeViewer->getCropSelection();
 
     // Dialog para mover a seleção
     QDialog dialog(this);
@@ -2191,7 +2585,7 @@ void MainWindow::onCropMove() {
             deltaXSpinBox->value(),
             deltaYSpinBox->value()
         );
-        processedImageViewer->setCropSelection(newSelection);
+        activeViewer->setCropSelection(newSelection);
         statusLabel->setText(QString("Seleção movida para (%1,%2)")
             .arg(newSelection.x()).arg(newSelection.y()));
     }
@@ -2230,6 +2624,15 @@ void MainWindow::setCurrentEntity(const QString& entityId, CurrentEntityType typ
 
     currentEntityType = type;
     currentEntityId = entityId;
+
+    // Atualizar informações do painel ativo
+    if (activePanel) {
+        rightPanelEntityType = type;
+        rightPanelEntityId = entityId;
+    } else {
+        leftPanelEntityType = type;
+        leftPanelEntityId = entityId;
+    }
 
     // Manter IDs legados sincronizados
     if (type == ENTITY_IMAGE) {
@@ -2274,9 +2677,13 @@ void MainWindow::setCurrentEntity(const QString& entityId, CurrentEntityType typ
 void MainWindow::loadCurrentEntityToView() {
     using PM = FingerprintEnhancer::ProjectManager;
 
+    // Usar visualizador e overlay do painel ativo
+    ImageViewer* activeViewer = getActiveViewer();
+    FingerprintEnhancer::MinutiaeOverlay* activeOverlay = getActiveOverlay();
+
     if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
-        processedImageViewer->clearImage();
-        minutiaeOverlay->setFragment(nullptr);
+        activeViewer->clearImage();
+        activeOverlay->setFragment(nullptr);
         return;
     }
 
@@ -2312,25 +2719,25 @@ void MainWindow::loadCurrentEntityToView() {
                      rgb.step, QImage::Format_RGB888).copy();
     }
 
-    processedImageViewer->setPixmap(QPixmap::fromImage(qimg));
+    activeViewer->setPixmap(QPixmap::fromImage(qimg));
 
     // Configurar overlay se for fragmento
     if (currentEntityType == ENTITY_FRAGMENT && fragment) {
-        minutiaeOverlay->setFragment(fragment);
-        minutiaeOverlay->setScaleFactor(processedImageViewer->getScaleFactor());
+        activeOverlay->setFragment(fragment);
+        activeOverlay->setScaleFactor(activeViewer->getScaleFactor());
 
         // Inicializar scroll offset
-        QPoint scrollOffset(processedImageViewer->horizontalScrollBar()->value(),
-                           processedImageViewer->verticalScrollBar()->value());
-        minutiaeOverlay->setScrollOffset(scrollOffset);
+        QPoint scrollOffset(activeViewer->horizontalScrollBar()->value(),
+                           activeViewer->verticalScrollBar()->value());
+        activeOverlay->setScrollOffset(scrollOffset);
 
         // Inicializar image offset (centralização)
-        minutiaeOverlay->setImageOffset(processedImageViewer->getImageOffset());
+        activeOverlay->setImageOffset(activeViewer->getImageOffset());
 
-        minutiaeOverlay->raise();
-        minutiaeOverlay->update();
+        activeOverlay->raise();
+        activeOverlay->update();
     } else {
-        minutiaeOverlay->setFragment(nullptr);
+        activeOverlay->setFragment(nullptr);
     }
 }
 

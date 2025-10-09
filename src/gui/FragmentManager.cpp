@@ -398,6 +398,18 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
 
         menu.addSeparator();
 
+        menu.addAction("◀ Enviar para Painel Esquerdo", [this, entityId, itemType]() {
+            bool isFragment = (itemType == "FRAGMENT");
+            emit sendToLeftPanelRequested(entityId, isFragment);
+        });
+
+        menu.addAction("▶ Enviar para Painel Direito", [this, entityId, itemType]() {
+            bool isFragment = (itemType == "FRAGMENT");
+            emit sendToRightPanelRequested(entityId, isFragment);
+        });
+
+        menu.addSeparator();
+
         menu.addAction("👁 Ver Original", [this, entityId, itemType]() {
             bool isFragment = (itemType == "FRAGMENT");
             emit viewOriginalRequested(entityId, isFragment);

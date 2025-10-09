@@ -66,6 +66,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
     // Menu File
@@ -202,6 +203,18 @@ private slots:
     cv::Mat& getCurrentWorkingImage();  // Retorna referência para workingImage da entidade corrente
     void applyOperationToCurrentEntity(std::function<void(cv::Mat&)> operation);
 
+    // Gerenciamento de painéis duais
+    void switchActivePanel();
+    void toggleRightViewer();
+    void setActivePanel(bool rightPanel);  // false = esquerdo, true = direito
+    ImageViewer* getActiveViewer();
+    FingerprintEnhancer::MinutiaeOverlay* getActiveOverlay();
+    void loadEntityToPanel(const QString& entityId, CurrentEntityType type, bool targetPanel);
+    void updateActivePanelEntity();
+    QWidget* createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay);
+    void clearActivePanel();
+    void showViewerContextMenu(const QPoint& pos, bool isLeftPanel);
+
     // Espelhamento
     void flipHorizontal();
     void flipVertical();
@@ -221,10 +234,21 @@ private:
     QWidget *centralWidget;
     QSplitter *mainSplitter;
 
-    // Visualizadores de imagem
-    ImageViewer *processedImageViewer;
+    // Visualizadores de imagem (dois painéis)
+    ImageViewer *processedImageViewer;  // Painel esquerdo
+    ImageViewer *secondImageViewer;     // Painel direito
     MinutiaeEditor *minutiaeEditor;
-    
+
+    // Containers e overlays para os dois painéis
+    QWidget *leftViewerContainer;
+    QWidget *rightViewerContainer;
+    FingerprintEnhancer::MinutiaeOverlay *leftMinutiaeOverlay;
+    FingerprintEnhancer::MinutiaeOverlay *rightMinutiaeOverlay;
+
+    // Controle de painéis
+    QSplitter *viewerSplitter;
+    bool activePanel;  // false = esquerdo, true = direito
+
     // Painéis laterais
     QTabWidget *leftPanel;
     QTabWidget *rightPanel;
@@ -261,11 +285,17 @@ private:
 
     // Novos componentes do sistema de projetos
     FingerprintEnhancer::FragmentManager *fragmentManager;
-    FingerprintEnhancer::MinutiaeOverlay *minutiaeOverlay;
+    FingerprintEnhancer::MinutiaeOverlay *minutiaeOverlay;  // Deprecated - usar leftMinutiaeOverlay/rightMinutiaeOverlay
 
-    // Sistema de Entidade Corrente
-    CurrentEntityType currentEntityType;  // Tipo da entidade sendo exibida/editada
-    QString currentEntityId;               // ID da entidade (Image ou Fragment)
+    // Sistema de Entidade Corrente (para cada painel)
+    CurrentEntityType currentEntityType;  // Tipo da entidade sendo exibida/editada no painel ativo
+    QString currentEntityId;               // ID da entidade (Image ou Fragment) no painel ativo
+
+    // Entidades para cada painel
+    CurrentEntityType leftPanelEntityType;
+    QString leftPanelEntityId;
+    CurrentEntityType rightPanelEntityType;
+    QString rightPanelEntityId;
 
     // IDs legados (manter por compatibilidade temporária)
     QString currentImageId;

@@ -46,6 +46,8 @@ signals:
     void resetWorkingImageRequested(const QString& id, bool isFragment);
 
     void makeCurrentRequested(const QString& entityId, bool isFragment);
+    void sendToLeftPanelRequested(const QString& entityId, bool isFragment);
+    void sendToRightPanelRequested(const QString& entityId, bool isFragment);
 
 private slots:
     void onTreeItemSelectionChanged();
