@@ -92,76 +92,132 @@ void MinutiaeOverlay::drawMinutia(QPainter& painter, const Minutia& minutia, boo
     QPoint pos = scalePoint(minutia.position);
     QColor color = isSelected ? selectedColor : normalColor;
 
-    // Desenhar marcador (círculo com X)
-    drawMinutiaMarker(painter, pos, color);
-
-    // Desenhar ângulo se habilitado
-    if (showAngles) {
-        drawMinutiaAngle(painter, pos, minutia.angle, color);
-    }
-}
-
-void MinutiaeOverlay::drawMinutiaMarker(QPainter& painter, const QPoint& pos, const QColor& color) {
-    // Círculo externo
+    // Desenhar marcador usando o símbolo configurado
+    int size = displaySettings.markerSize;
     QPen pen(color, 2);
     painter.setPen(pen);
     painter.setBrush(Qt::NoBrush);
-    painter.drawEllipse(pos, minutiaRadius, minutiaRadius);
 
-    // X interno
-    int offset = minutiaRadius / 2;
-    painter.drawLine(pos.x() - offset, pos.y() - offset, pos.x() + offset, pos.y() + offset);
-    painter.drawLine(pos.x() - offset, pos.y() + offset, pos.x() + offset, pos.y() - offset);
+    switch (displaySettings.symbol) {
+        case MinutiaeSymbol::CIRCLE:
+            // Círculo simples
+            painter.drawEllipse(pos, size/2, size/2);
+            break;
+
+        case MinutiaeSymbol::CIRCLE_X:
+            // Círculo com X
+            painter.drawEllipse(pos, size/2, size/2);
+            {
+                int offset = size / 4;
+                painter.drawLine(pos.x() - offset, pos.y() - offset, pos.x() + offset, pos.y() + offset);
+                painter.drawLine(pos.x() - offset, pos.y() + offset, pos.x() + offset, pos.y() - offset);
+            }
+            break;
+
+        case MinutiaeSymbol::CIRCLE_ARROW:
+            // Círculo com seta (ângulo)
+            painter.drawEllipse(pos, size/2, size/2);
+            {
+                double radians = minutia.angle * M_PI / 180.0;
+                int arrowLen = 1.5*size / 2;
+                int endX = pos.x() + static_cast<int>(arrowLen * cos(radians));
+                int endY = pos.y() - static_cast<int>(arrowLen * sin(radians));
+                painter.drawLine(pos, QPoint(endX, endY));
+
+                // Pontas da seta
+                double arrowSize = size/5;
+                double arrowAngle1 = radians + M_PI * 3.0 / 4.0;
+                double arrowAngle2 = radians - M_PI * 3.0 / 4.0;
+                QPoint arrow1(endX + static_cast<int>(arrowSize * cos(arrowAngle1)),
+                              endY - static_cast<int>(arrowSize * sin(arrowAngle1)));
+                QPoint arrow2(endX + static_cast<int>(arrowSize * cos(arrowAngle2)),
+                              endY - static_cast<int>(arrowSize * sin(arrowAngle2)));
+                painter.drawLine(endX, endY, arrow1.x(), arrow1.y());
+                painter.drawLine(endX, endY, arrow2.x(), arrow2.y());
+            }
+            break;
+
+        case MinutiaeSymbol::CIRCLE_CROSS:
+            // Círculo com cruz
+            painter.drawEllipse(pos, size/2, size/2);
+            {
+                int offset = size / 4;
+                painter.drawLine(pos.x() - offset, pos.y(), pos.x() + offset, pos.y());
+                painter.drawLine(pos.x(), pos.y() - offset, pos.x(), pos.y() + offset);
+            }
+            break;
+
+        case MinutiaeSymbol::TRIANGLE:
+            // Triângulo
+            {
+                int h = size / 2;
+                QPolygon triangle;
+                triangle << QPoint(pos.x(), pos.y() - h)
+                        << QPoint(pos.x() - h, pos.y() + h/2)
+                        << QPoint(pos.x() + h, pos.y() + h/2);
+                painter.drawPolygon(triangle);
+            }
+            break;
+
+        case MinutiaeSymbol::SQUARE:
+            // Quadrado
+            {
+                int h = size / 2;
+                painter.drawRect(pos.x() - h, pos.y() - h, size, size);
+            }
+            break;
+
+        case MinutiaeSymbol::DIAMOND:
+            // Losango
+            {
+                int h = size / 2;
+                QPolygon diamond;
+                diamond << QPoint(pos.x(), pos.y() - h)
+                       << QPoint(pos.x() + h, pos.y())
+                       << QPoint(pos.x(), pos.y() + h)
+                       << QPoint(pos.x() - h, pos.y());
+                painter.drawPolygon(diamond);
+            }
+            break;
+    }
+
+    // Desenhar ângulo adicional se habilitado (linha externa)
+    if (showAngles && displaySettings.symbol != MinutiaeSymbol::CIRCLE_ARROW) {
+        int lineLength = size * 2;
+        double radians = minutia.angle * M_PI / 180.0;
+        int endX = pos.x() + static_cast<int>(lineLength * cos(radians));
+        int endY = pos.y() - static_cast<int>(lineLength * sin(radians));
+        painter.drawLine(pos.x(), pos.y(), endX, endY);
+    }
 }
 
-void MinutiaeOverlay::drawMinutiaAngle(QPainter& painter, const QPoint& pos, float angle, const QColor& color) {
-    // Desenhar linha indicando o ângulo
-    int lineLength = minutiaRadius * 2;
-    double radians = angle * M_PI / 180.0;
-    int endX = pos.x() + static_cast<int>(lineLength * cos(radians));
-    int endY = pos.y() - static_cast<int>(lineLength * sin(radians));
-
-    QPen pen(color, 2);
-    painter.setPen(pen);
-    painter.drawLine(pos.x(), pos.y(), endX, endY);
-
-    // Seta na ponta
-    double arrowSize = 5;
-    double arrowAngle1 = radians + M_PI * 3.0 / 4.0;
-    double arrowAngle2 = radians - M_PI * 3.0 / 4.0;
-
-    QPoint arrow1(endX + static_cast<int>(arrowSize * cos(arrowAngle1)),
-                  endY - static_cast<int>(arrowSize * sin(arrowAngle1)));
-    QPoint arrow2(endX + static_cast<int>(arrowSize * cos(arrowAngle2)),
-                  endY - static_cast<int>(arrowSize * sin(arrowAngle2)));
-
-    painter.drawLine(endX, endY, arrow1.x(), arrow1.y());
-    painter.drawLine(endX, endY, arrow2.x(), arrow2.y());
-}
 
 void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected) {
     QColor textColor = isSelected ? selectedColor : normalColor;
     QFont font = painter.font();
-    font.setPointSize(10);
+    font.setPointSize(displaySettings.labelFontSize);
     font.setBold(isSelected);
     painter.setFont(font);
 
-    // Desenhar número
-    QString label = QString::number(number);
-    QRect textRect = painter.fontMetrics().boundingRect(label);
-    QPoint textPos(pos.x() + minutiaRadius + 5, pos.y() - minutiaRadius);
+    int size = displaySettings.markerSize;
 
-    // Fundo branco para melhor legibilidade
-    painter.fillRect(textRect.translated(textPos), QColor(255, 255, 255, 200));
+    // Desenhar número com espaços
+    QString label = QString(" %1 .").arg(number);
+    QRect textRect = painter.fontMetrics().boundingRect(label);
+    QPoint textPos(pos.x() + size/2 + 5, pos.y() - size/2);
+
+    // Fundo configurável para melhor legibilidade
+    painter.fillRect(textRect.translated(textPos), displaySettings.labelBackgroundColor);
     painter.setPen(textColor);
     painter.drawText(textPos, label);
 
-    // Desenhar tipo (abreviação)
+    // Desenhar tipo (abreviação) com espaços
     if (!type.isEmpty() && type != "N/C") {
-        QPoint typePos(pos.x() + minutiaRadius + 5, pos.y() + 5);
-        QRect typeRect = painter.fontMetrics().boundingRect(type);
-        painter.fillRect(typeRect.translated(typePos), QColor(255, 255, 255, 200));
-        painter.drawText(typePos, type);
+        QString typeLabel = QString(" %1 .").arg(type);
+        QPoint typePos(pos.x() + size/2 + 5, pos.y() + 5);
+        QRect typeRect = painter.fontMetrics().boundingRect(typeLabel);
+        painter.fillRect(typeRect.translated(typePos), displaySettings.labelBackgroundColor);
+        painter.drawText(typePos, typeLabel);
     }
 }
 
@@ -224,7 +280,7 @@ void MinutiaeOverlay::mouseReleaseEvent(QMouseEvent *event) {
 Minutia* MinutiaeOverlay::findMinutiaAt(const QPoint& pos) {
     if (!currentFragment) return nullptr;
 
-    int clickRadius = minutiaRadius + 5; // Margem de tolerância
+    int clickRadius = displaySettings.markerSize / 2 + 5; // Margem de tolerância
 
     for (auto& minutia : currentFragment->minutiae) {
         QPoint scaledPos = scalePoint(minutia.position);

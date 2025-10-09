@@ -6,6 +6,7 @@
 #include <QVector>
 #include <QPoint>
 #include "../core/ProjectModel.h"
+#include "MinutiaeDisplayDialog.h"
 
 namespace FingerprintEnhancer {
 
@@ -38,6 +39,10 @@ public:
     void setShowLabels(bool show) { showLabels = show; update(); }
     void setShowAngles(bool show) { showAngles = show; update(); }
     void setMinutiaRadius(int radius) { minutiaRadius = radius; update(); }
+    void setDisplaySettings(const MinutiaeDisplaySettings& settings) {
+        displaySettings = settings;
+        update();
+    }
 
 signals:
     void minutiaClicked(const QString& minutiaId, const QPoint& position);
@@ -65,6 +70,7 @@ private:
     bool showLabels;
     bool showAngles;
     int minutiaRadius;
+    MinutiaeDisplaySettings displaySettings;
 
     // Cores
     QColor normalColor;
@@ -73,8 +79,6 @@ private:
 
     // Helper functions
     void drawMinutia(QPainter& painter, const Minutia& minutia, bool isSelected);
-    void drawMinutiaMarker(QPainter& painter, const QPoint& pos, const QColor& color);
-    void drawMinutiaAngle(QPainter& painter, const QPoint& pos, float angle, const QColor& color);
     void drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected);
 
     Minutia* findMinutiaAt(const QPoint& pos);

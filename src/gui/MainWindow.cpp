@@ -136,6 +136,8 @@ void MainWindow::createMenus() {
     viewMenu->addAction("Lado a &Lado", this, &MainWindow::toggleSideBySide, QKeySequence("Ctrl+2"));
     viewMenu->addSeparator();
     viewMenu->addAction("&Mostrar/Ocultar Painel Direito", this, &MainWindow::toggleRightPanel, QKeySequence("Ctrl+Shift+P"));
+    viewMenu->addSeparator();
+    viewMenu->addAction("&Configurar Visualização de Minúcias...", this, &MainWindow::configureMinutiaeDisplay, QKeySequence("Ctrl+Shift+M"));
 
     // Menu Ferramentas
     QMenu *toolsMenu = menuBar()->addMenu("&Ferramentas");
@@ -1063,6 +1065,25 @@ void MainWindow::toggleRightPanel() {
         rightPanel->hide();
     } else {
         rightPanel->show();
+    }
+}
+
+void MainWindow::configureMinutiaeDisplay() {
+    using namespace FingerprintEnhancer;
+
+    MinutiaeDisplayDialog dialog(minutiaeDisplaySettings, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        minutiaeDisplaySettings = dialog.getSettings();
+
+        // Aplicar configurações aos overlays
+        leftMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
+        rightMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
+
+        // Atualizar visualização
+        leftMinutiaeOverlay->update();
+        rightMinutiaeOverlay->update();
+
+        statusLabel->setText("Configurações de visualização de minúcias atualizadas");
     }
 }
 

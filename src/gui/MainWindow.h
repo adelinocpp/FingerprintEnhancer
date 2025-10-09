@@ -34,6 +34,7 @@
 #include "MinutiaeOverlay.h"
 #include "MinutiaEditDialog.h"
 #include "NewProjectDialog.h"
+#include "MinutiaeDisplayDialog.h"
 #include "../afis/AFISMatcher.h"
 
 /**
@@ -108,6 +109,7 @@ private slots:
     void zoomActual();
     void toggleSideBySide();
     void toggleRightPanel();
+    void configureMinutiaeDisplay();
 
     // Menu Tools
     void changeLanguage();
@@ -303,6 +305,9 @@ private:
 
     // Modo de ferramenta ativa
     ToolMode currentToolMode;
+
+    // Configurações de visualização de minúcias
+    FingerprintEnhancer::MinutiaeDisplaySettings minutiaeDisplaySettings;
 
     // Lista de minúcias marcadas (legado - será removido)
     QVector<QPoint> markedMinutiae;
