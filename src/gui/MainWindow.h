@@ -106,6 +106,7 @@ private slots:
     void zoomFit();
     void zoomActual();
     void toggleSideBySide();
+    void toggleRightPanel();
 
     // Menu Tools
     void changeLanguage();

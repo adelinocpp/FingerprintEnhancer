@@ -126,6 +126,8 @@ void MainWindow::createMenus() {
     viewMenu->addAction("Tamanho &Real", this, &MainWindow::zoomActual, QKeySequence("Ctrl+1"));
     viewMenu->addSeparator();
     viewMenu->addAction("Lado a &Lado", this, &MainWindow::toggleSideBySide, QKeySequence("Ctrl+2"));
+    viewMenu->addSeparator();
+    viewMenu->addAction("&Mostrar/Ocultar Painel Direito", this, &MainWindow::toggleRightPanel, QKeySequence("Ctrl+Shift+P"));
 
     // Menu Ferramentas
     QMenu *toolsMenu = menuBar()->addMenu("&Ferramentas");
@@ -297,6 +299,10 @@ void MainWindow::createLeftPanel() {
     leftPanel = new QTabWidget();
     leftPanel->setMaximumWidth(300);
 
+    // Tab de gerenciamento de projeto (primeira aba)
+    fragmentManager = new FingerprintEnhancer::FragmentManager();
+    leftPanel->addTab(fragmentManager, "Projeto");
+
     // Tab de processamento
     QWidget *enhancementTab = new QWidget();
     QVBoxLayout *enhancementLayout = new QVBoxLayout(enhancementTab);
@@ -392,12 +398,11 @@ void MainWindow::createRightPanel() {
     rightPanel->addTab(analysisTab, "Análise");
     rightPanel->addTab(historyTab, "Histórico");
 
-    // Tab de gerenciamento de projeto
-    fragmentManager = new FingerprintEnhancer::FragmentManager();
-    rightPanel->addTab(fragmentManager, "Projeto");
-
     // Adicionar painel direito ao splitter principal
     mainSplitter->addWidget(rightPanel);
+
+    // Ocultar painel direito por padrão
+    rightPanel->hide();
 
     // Configurar tamanhos do splitter principal
     mainSplitter->setSizes({300, 800, 300});
@@ -954,6 +959,15 @@ void MainWindow::zoomOut() { processedImageViewer->zoomOut(); }
 void MainWindow::zoomFit() { processedImageViewer->zoomToFit(); }
 void MainWindow::zoomActual() { processedImageViewer->zoomToActual(); }
 void MainWindow::toggleSideBySide() { sideBySideMode = !sideBySideMode; }
+
+void MainWindow::toggleRightPanel() {
+    if (rightPanel->isVisible()) {
+        rightPanel->hide();
+    } else {
+        rightPanel->show();
+    }
+}
+
 void MainWindow::showProcessingProgress(const QString &operation) {
     Q_UNUSED(operation);
     progressBar->setVisible(true);
