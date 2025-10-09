@@ -3,10 +3,11 @@
 #include <QGroupBox>
 
 RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer, QWidget *parent)
-    : QDialog(parent), originalImage(image.clone()), imageViewer(viewer), finalAngle(0.0), accepted(false) {
+    : QDialog(parent), originalImage(image.clone()), imageViewer(viewer),
+      finalAngle(0.0), accepted(false), useTransparentBackground(false) {
 
     setWindowTitle("Rotacionar Imagem");
-    setMinimumSize(400, 200);
+    setMinimumSize(400, 250);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
@@ -45,6 +46,12 @@ RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer, QWidge
 
     mainLayout->addWidget(controlGroup);
 
+    // Opção de fundo transparente
+    transparentBgCheckbox = new QCheckBox("Usar fundo transparente (para filtros FFT)");
+    transparentBgCheckbox->setToolTip("Preenche o fundo com transparência em vez de branco.\n"
+                                       "Útil para aplicar filtros FFT posteriormente.");
+    mainLayout->addWidget(transparentBgCheckbox);
+
     // Botões
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->addStretch();
@@ -59,6 +66,7 @@ RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer, QWidge
     connect(angleSlider, &QSlider::valueChanged, this, &RotationDialog::onSliderChanged);
     connect(angleSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, &RotationDialog::onSpinBoxChanged);
+    connect(transparentBgCheckbox, &QCheckBox::stateChanged, this, &RotationDialog::onTransparentBgChanged);
     connect(acceptButton, &QPushButton::clicked, this, &RotationDialog::onAccept);
     connect(cancelButton, &QPushButton::clicked, this, &RotationDialog::onReject);
 
@@ -82,6 +90,12 @@ void RotationDialog::onSpinBoxChanged(double value) {
     angleSlider->setValue(sliderValue);
     angleSlider->blockSignals(false);
     updatePreview(value);
+}
+
+void RotationDialog::onTransparentBgChanged(int state) {
+    useTransparentBackground = (state == Qt::Checked);
+    // Atualizar preview com nova configuração
+    updatePreview(finalAngle);
 }
 
 void RotationDialog::updatePreview(double angle) {
@@ -112,8 +126,28 @@ cv::Mat RotationDialog::rotateImage(const cv::Mat &image, double angle) {
     rotMatrix.at<double>(1, 2) += (new_h / 2.0) - center.y;
 
     cv::Mat rotated;
-    cv::warpAffine(image, rotated, rotMatrix, cv::Size(new_w, new_h),
-                   cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
+
+    if (useTransparentBackground) {
+        // Converter para BGRA se necessário
+        cv::Mat imageWithAlpha;
+        if (image.channels() == 3) {
+            cv::cvtColor(image, imageWithAlpha, cv::COLOR_BGR2BGRA);
+        } else if (image.channels() == 1) {
+            cv::cvtColor(image, imageWithAlpha, cv::COLOR_GRAY2BGRA);
+        } else if (image.channels() == 4) {
+            imageWithAlpha = image.clone();
+        } else {
+            imageWithAlpha = image.clone();
+        }
+
+        // Rotacionar com fundo transparente
+        cv::warpAffine(imageWithAlpha, rotated, rotMatrix, cv::Size(new_w, new_h),
+                       cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0, 0));
+    } else {
+        // Rotacionar com fundo branco (comportamento padrão)
+        cv::warpAffine(image, rotated, rotMatrix, cv::Size(new_w, new_h),
+                       cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
+    }
 
     return rotated;
 }

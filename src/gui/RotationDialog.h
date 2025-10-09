@@ -6,6 +6,7 @@
 #include <QDoubleSpinBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QCheckBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <opencv2/opencv.hpp>
@@ -29,6 +30,9 @@ private slots:
     void onAccept();
     void onReject();
 
+private slots:
+    void onTransparentBgChanged(int state);
+
 private:
     cv::Mat originalImage;
     cv::Mat rotatedImage;
@@ -36,9 +40,11 @@ private:
 
     double finalAngle;
     bool accepted;
+    bool useTransparentBackground;
 
     QSlider *angleSlider;
     QDoubleSpinBox *angleSpinBox;
+    QCheckBox *transparentBgCheckbox;
     QLabel *previewLabel;
     QPushButton *acceptButton;
     QPushButton *cancelButton;

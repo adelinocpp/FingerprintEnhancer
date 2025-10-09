@@ -2,6 +2,7 @@
 #include "ProcessingWorker.h"
 #include "RotationDialog.h"
 #include "MinutiaEditDialog.h"
+#include "FFTFilterDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -107,9 +108,6 @@ void MainWindow::createMenus() {
     enhanceMenu->addAction("&Equalizar Histograma", this, &MainWindow::equalizeHistogram);
     enhanceMenu->addAction("&CLAHE...", this, &MainWindow::applyCLAHE);
     enhanceMenu->addSeparator();
-    enhanceMenu->addAction("&Inverter Cores", this, &MainWindow::invertColors, QKeySequence("Ctrl+Shift+I"));
-    enhanceMenu->addAction("&Rotacionar Imagem...", this, &MainWindow::rotateImage);
-    enhanceMenu->addSeparator();
     enhanceMenu->addAction("&Binarizar Imagem", this, &MainWindow::binarizeImage, QKeySequence("Ctrl+T"));
     enhanceMenu->addAction("&Esqueletizar", this, &MainWindow::skeletonizeImage, QKeySequence("Ctrl+K"));
 
@@ -160,11 +158,13 @@ void MainWindow::createMenus() {
 
     // Submenu de Conversão de Espaço de Cor
     QMenu *colorMenu = toolsMenu->addMenu("Espaço de &Cor");
+    colorMenu->addAction("Converter para &Escala de Cinza", this, &MainWindow::convertToGrayscale, QKeySequence("Ctrl+Shift+G"));
+    colorMenu->addAction("&Inverter Cores", this, &MainWindow::invertColors, QKeySequence("Ctrl+Shift+I"));
+    colorMenu->addSeparator();
     colorMenu->addAction("Converter para &RGB", this, &MainWindow::convertToRGB);
     colorMenu->addAction("Converter para &HSV", this, &MainWindow::convertToHSV);
     colorMenu->addAction("Converter para H&SI", this, &MainWindow::convertToHSI);
     colorMenu->addAction("Converter para &Lab", this, &MainWindow::convertToLab);
-    colorMenu->addAction("Converter para &Escala de Cinza", this, &MainWindow::convertToGrayscale, QKeySequence("Ctrl+Shift+G"));
     colorMenu->addSeparator();
     colorMenu->addAction("&Ajustar Níveis de Cor...", this, &MainWindow::adjustColorLevels);
 
@@ -770,46 +770,35 @@ void MainWindow::onThresholdChanged(int value) {
 
 // Implementações básicas dos outros slots (a serem expandidas)
 void MainWindow::openFFTDialog() {
-    // TODO: Criar diálogo completo para FFT com visualização de frequências
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        // Converter para escala de cinza se necessário
-        cv::Mat gray;
-        if (img.channels() > 1) {
-            cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
-        } else {
-            gray = img.clone();
-        }
+    using PM = FingerprintEnhancer::ProjectManager;
 
-        // Aplicar FFT com filtro passa-alta básico
-        cv::Mat padded;
-        int m = cv::getOptimalDFTSize(gray.rows);
-        int n = cv::getOptimalDFTSize(gray.cols);
-        cv::copyMakeBorder(gray, padded, 0, m - gray.rows, 0, n - gray.cols, cv::BORDER_CONSTANT, cv::Scalar::all(0));
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Filtro FFT", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
 
-        cv::Mat planes[] = {cv::Mat_<float>(padded), cv::Mat::zeros(padded.size(), CV_32F)};
-        cv::Mat complexI;
-        cv::merge(planes, 2, complexI);
-        cv::dft(complexI, complexI);
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) {
+        QMessageBox::warning(this, "Filtro FFT", "Imagem inválida");
+        return;
+    }
 
-        // Filtro passa-alta para remover ruído de baixa frequência
-        cv::Mat filter = cv::Mat::ones(complexI.size(), CV_32F);
-        int cx = filter.cols / 2;
-        int cy = filter.rows / 2;
-        int radius = 30;
-        cv::circle(filter, cv::Point(cx, cy), radius, cv::Scalar(0), -1);
-        cv::Mat planes2[2];
-        cv::split(complexI, planes2);
-        planes2[0] = planes2[0].mul(filter);
-        planes2[1] = planes2[1].mul(filter);
-        cv::merge(planes2, 2, complexI);
+    // Abrir diálogo interativo de FFT
+    FFTFilterDialog dialog(workingImg, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        cv::Mat filtered = dialog.getFilteredImage();
 
-        cv::idft(complexI, complexI);
-        cv::split(complexI, planes);
-        cv::normalize(planes[0], img, 0, 255, cv::NORM_MINMAX);
-        img.convertTo(img, CV_8U);
-        img = img(cv::Rect(0, 0, gray.cols, gray.rows));
-    });
-    statusLabel->setText("FFT aplicado para remoção de ruído");
+        // Aplicar imagem filtrada
+        filtered.copyTo(workingImg);
+
+        // Recarregar visualização
+        loadCurrentEntityToView();
+
+        statusLabel->setText("Filtro FFT interativo aplicado");
+        PM::instance().getCurrentProject()->setModified();
+    } else {
+        statusLabel->setText("Filtro FFT cancelado");
+    }
 }
 
 void MainWindow::subtractBackground() {
