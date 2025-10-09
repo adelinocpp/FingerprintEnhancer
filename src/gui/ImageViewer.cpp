@@ -126,6 +126,10 @@ ImageViewer::ImageViewer(QWidget *parent)
     // Habilitar mouse tracking para recorte
     setMouseTracking(true);
     imageLabel->setMouseTracking(true);
+
+    // Conectar scrollbars para emitir sinal quando scroll mudar
+    connect(horizontalScrollBar(), &QScrollBar::valueChanged, this, &ImageViewer::onScrollBarValueChanged);
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this, &ImageViewer::onScrollBarValueChanged);
 }
 
 ImageViewer::~ImageViewer() = default;
@@ -307,6 +311,8 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event) {
 
 void ImageViewer::resizeEvent(QResizeEvent *event) {
     QScrollArea::resizeEvent(event);
+    // Emitir novo offset quando viewport redimensionar
+    emit imageOffsetChanged(getImageOffset());
 }
 
 void ImageViewer::onSyncViewportChanged(QPoint position) {
@@ -318,14 +324,17 @@ void ImageViewer::onSyncViewportChanged(QPoint position) {
 
 void ImageViewer::updateImageDisplay() {
     if (currentPixmap.isNull()) return;
-    
+
     QPixmap scaledPixmap = currentPixmap.scaled(
         currentPixmap.size() * scaleFactor,
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation);
-    
+
     imageLabel->setPixmap(scaledPixmap);
     imageLabel->resize(scaledPixmap.size());
+
+    // Emitir novo offset quando display atualizar
+    emit imageOffsetChanged(getImageOffset());
 }
 
 void ImageViewer::scaleImage(double factor) {
@@ -386,5 +395,37 @@ void ImageViewer::clearCropSelection() {
     cropSelection = QRect();
     isSelecting = false;
     imageLabel->clearOverlay();
+}
+
+void ImageViewer::onScrollBarValueChanged() {
+    // Emitir sinal com o offset de scroll atual
+    QPoint scrollOffset(horizontalScrollBar()->value(), verticalScrollBar()->value());
+    emit scrollChanged(scrollOffset);
+}
+
+QPoint ImageViewer::getImageOffset() const {
+    if (currentPixmap.isNull()) {
+        return QPoint(0, 0);
+    }
+
+    // Tamanho da imagem escalada
+    QSize scaledSize = currentPixmap.size() * scaleFactor;
+
+    // Tamanho do viewport
+    QSize viewportSize = viewport()->size();
+
+    // Calcular offset de centralização
+    int offsetX = 0;
+    int offsetY = 0;
+
+    if (scaledSize.width() < viewportSize.width()) {
+        offsetX = (viewportSize.width() - scaledSize.width()) / 2;
+    }
+
+    if (scaledSize.height() < viewportSize.height()) {
+        offsetY = (viewportSize.height() - scaledSize.height()) / 2;
+    }
+
+    return QPoint(offsetX, offsetY);
 }
 

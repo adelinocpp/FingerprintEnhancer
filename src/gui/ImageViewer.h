@@ -88,11 +88,16 @@ public:
     QRect getCropSelectionInternal() const { return cropSelection; }
     bool isCropModeEnabled() const { return cropModeEnabled; }
 
+    // Calcular offset de centralização da imagem
+    QPoint getImageOffset() const;
+
 signals:
     void imageClicked(QPoint imagePosition);
     void mouseMoved(QPoint imagePosition);
     void zoomChanged(double factor);
     void viewportChanged(QPoint position);
+    void scrollChanged(QPoint scrollOffset);
+    void imageOffsetChanged(QPoint imageOffset);
     void cropSelectionChanged(QRect selection);
 
 protected:
@@ -104,6 +109,7 @@ protected:
 
 private slots:
     void onSyncViewportChanged(QPoint position);
+    void onScrollBarValueChanged();
 
 private:
     // Componentes da interface

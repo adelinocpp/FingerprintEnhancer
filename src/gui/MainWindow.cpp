@@ -11,6 +11,7 @@
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QFormLayout>
 #include <QtWidgets/QDialogButtonBox>
+#include <QtWidgets/QScrollBar>
 #include <QtGui/QActionGroup>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QDir>
@@ -260,16 +261,9 @@ void MainWindow::createCentralWidget() {
     mainSplitter = new QSplitter(Qt::Horizontal);
 
     // Área de imagens no centro
-    imageSplitter = new QSplitter(Qt::Horizontal);
-
     // Visualizadores de imagem
-    originalImageViewer = new ImageViewer();
     processedImageViewer = new ImageViewer();
     minutiaeEditor = new MinutiaeEditor();
-
-    // Configurar sincronização entre viewers
-    originalImageViewer->setSyncViewer(processedImageViewer);
-    processedImageViewer->setSyncViewer(originalImageViewer);
 
     // Criar overlay de minúcias - será um widget sobreposto ao viewer
     // Precisamos criar um container com stacked layout para overlay funcionar
@@ -287,10 +281,8 @@ void MainWindow::createCentralWidget() {
     minutiaeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     minutiaeOverlay->setStyleSheet("background-color: transparent;");
 
-    // Layout: imagem original pequena (200px) e imagem processada grande (com overlay)
-    imageSplitter->addWidget(originalImageViewer);
-    imageSplitter->addWidget(viewerContainer); // Usar container em vez de viewer direto
-    imageSplitter->setSizes({200, 1200}); // Original minimizada, processada em destaque
+    // Adicionar viewer direto ao mainSplitter (sem imagem pequena)
+    mainSplitter->addWidget(viewerContainer);
 
     // Esconder o minutiaeEditor por padrão (será usado depois)
     minutiaeEditor->hide();
@@ -298,8 +290,6 @@ void MainWindow::createCentralWidget() {
     // Layout principal
     QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
     mainLayout->addWidget(mainSplitter);
-
-    mainSplitter->addWidget(imageSplitter);
 }
 
 void MainWindow::createLeftPanel() {
@@ -476,6 +466,14 @@ void MainWindow::connectSignals() {
     // Conectar sinal de zoom do ImageViewer ao MinutiaeOverlay
     connect(processedImageViewer, &ImageViewer::zoomChanged,
             minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScaleFactor);
+
+    // Conectar sinal de scroll do ImageViewer ao MinutiaeOverlay
+    connect(processedImageViewer, &ImageViewer::scrollChanged,
+            minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScrollOffset);
+
+    // Conectar sinal de offset de imagem do ImageViewer ao MinutiaeOverlay
+    connect(processedImageViewer, &ImageViewer::imageOffsetChanged,
+            minutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setImageOffset);
 }
 
 void MainWindow::updateWindowTitle() {
@@ -597,11 +595,10 @@ void MainWindow::openImage() {
         if (img) {
             currentImageId = img->id;
 
-            // Carregar imagem no processador (para edição)
-            if (imageProcessor->loadImage(fileName.toStdString())) {
-                updateImageDisplay();
-                statusLabel->setText("Imagem carregada: " + QFileInfo(fileName).fileName());
-            }
+            // Auto-selecionar a imagem recém-adicionada
+            setCurrentEntity(img->id, ENTITY_IMAGE);
+
+            statusLabel->setText("Imagem carregada e selecionada: " + QFileInfo(fileName).fileName());
         } else {
             QMessageBox::warning(this, "Erro", "Falha ao carregar imagem");
         }
@@ -635,13 +632,11 @@ void MainWindow::undoLastOperation() {
 
 void MainWindow::updateImageDisplay() {
     if (imageProcessor->isImageLoaded()) {
-        cv::Mat original = imageProcessor->getOriginalImage();
         cv::Mat processed = imageProcessor->getCurrentImage();
-        
-        originalImageViewer->setImage(original);
+
         processedImageViewer->setImage(processed);
         minutiaeEditor->setImage(processed);
-        
+
         updateProcessingHistory();
         updateStatusBar();
     }
@@ -964,10 +959,10 @@ void MainWindow::extractMinutiae() {
 }
 void MainWindow::compareMinutiae() { statusLabel->setText("Minutiae compared"); }
 void MainWindow::generateChart() { statusLabel->setText("Chart generated"); }
-void MainWindow::zoomIn() { originalImageViewer->zoomIn(); processedImageViewer->zoomIn(); }
-void MainWindow::zoomOut() { originalImageViewer->zoomOut(); processedImageViewer->zoomOut(); }
-void MainWindow::zoomFit() { originalImageViewer->zoomToFit(); processedImageViewer->zoomToFit(); }
-void MainWindow::zoomActual() { originalImageViewer->zoomToActual(); processedImageViewer->zoomToActual(); }
+void MainWindow::zoomIn() { processedImageViewer->zoomIn(); }
+void MainWindow::zoomOut() { processedImageViewer->zoomOut(); }
+void MainWindow::zoomFit() { processedImageViewer->zoomToFit(); }
+void MainWindow::zoomActual() { processedImageViewer->zoomToActual(); }
 void MainWindow::toggleSideBySide() { sideBySideMode = !sideBySideMode; }
 void MainWindow::showProcessingProgress(const QString &operation) {
     Q_UNUSED(operation);
@@ -1127,8 +1122,6 @@ void MainWindow::onProcessingStatus(QString message) {
 
 void MainWindow::activateCropTool() {
     // Desativar modo de recorte na imagem original (não usamos ela para recorte)
-    originalImageViewer->setCropMode(false);
-
     // Ativar modo de recorte na imagem processada
     processedImageViewer->setCropMode(true);
 
@@ -1210,11 +1203,11 @@ void MainWindow::applyCrop() {
     processedImageViewer->setCropMode(false);
     setToolMode(TOOL_NONE);
 
-    // Selecionar o fragmento criado
-    onFragmentSelected(img->fragments.last().id);
-
-    // Atualizar visualização no gerenciador
+    // Atualizar visualização no gerenciador ANTES de selecionar
     fragmentManager->updateView();
+
+    // Selecionar o fragmento criado automaticamente
+    setCurrentEntity(img->fragments.last().id, ENTITY_FRAGMENT);
 
     statusLabel->setText(QString("Fragmento criado: %1x%2 px")
                         .arg(selection.width()).arg(selection.height()));
@@ -1289,27 +1282,68 @@ cv::Mat MainWindow::rotateImagePreservingSize(const cv::Mat &image, double angle
 }
 
 void MainWindow::rotateRight90() {
-    applyOperationToCurrentEntity([this](cv::Mat& img) {
-        cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
-    });
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_FRAGMENT && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (frag) {
+            cv::Size oldSize = frag->workingImage.size();
+            cv::rotate(frag->workingImage, frag->workingImage, cv::ROTATE_90_CLOCKWISE);
+            cv::Size newSize = frag->workingImage.size();
+            frag->rotateMinutiae(-90.0, oldSize, newSize); // -90 porque OpenCV rotaciona no sentido horário
+            loadCurrentEntityToView();
+        }
+    } else {
+        applyOperationToCurrentEntity([](cv::Mat& img) {
+            cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
+        });
+    }
     statusLabel->setText("Imagem rotacionada 90° à direita");
 }
 
 void MainWindow::rotateLeft90() {
-    applyOperationToCurrentEntity([this](cv::Mat& img) {
-        cv::rotate(img, img, cv::ROTATE_90_COUNTERCLOCKWISE);
-    });
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_FRAGMENT && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (frag) {
+            cv::Size oldSize = frag->workingImage.size();
+            cv::rotate(frag->workingImage, frag->workingImage, cv::ROTATE_90_COUNTERCLOCKWISE);
+            cv::Size newSize = frag->workingImage.size();
+            frag->rotateMinutiae(90.0, oldSize, newSize);
+            loadCurrentEntityToView();
+        }
+    } else {
+        applyOperationToCurrentEntity([](cv::Mat& img) {
+            cv::rotate(img, img, cv::ROTATE_90_COUNTERCLOCKWISE);
+        });
+    }
     statusLabel->setText("Imagem rotacionada 90° à esquerda");
 }
 
 void MainWindow::rotate180() {
-    applyOperationToCurrentEntity([this](cv::Mat& img) {
-        cv::rotate(img, img, cv::ROTATE_180);
-    });
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_FRAGMENT && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (frag) {
+            cv::Size oldSize = frag->workingImage.size();
+            cv::rotate(frag->workingImage, frag->workingImage, cv::ROTATE_180);
+            cv::Size newSize = frag->workingImage.size();
+            frag->rotateMinutiae(180.0, oldSize, newSize);
+            loadCurrentEntityToView();
+        }
+    } else {
+        applyOperationToCurrentEntity([](cv::Mat& img) {
+            cv::rotate(img, img, cv::ROTATE_180);
+        });
+    }
     statusLabel->setText("Imagem rotacionada 180°");
 }
 
 void MainWindow::rotateCustomAngle() {
+    using PM = FingerprintEnhancer::ProjectManager;
+
     if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
         QMessageBox::warning(this, "Rotação", "Nenhuma imagem ou fragmento selecionado");
         return;
@@ -1329,8 +1363,19 @@ void MainWindow::rotateCustomAngle() {
         double angle = dialog.getRotationAngle();
         cv::Mat rotated = dialog.getRotatedImage();
 
-        // Aplicar diretamente na workingImage da entidade corrente
-        rotated.copyTo(workingImg);
+        // Se for fragmento, atualizar minúcias
+        if (currentEntityType == ENTITY_FRAGMENT) {
+            FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+            if (frag) {
+                cv::Size oldSize = workingImg.size();
+                cv::Size newSize = rotated.size();
+                rotated.copyTo(frag->workingImage);
+                frag->rotateMinutiae(angle, oldSize, newSize);
+            }
+        } else {
+            // Aplicar diretamente na workingImage da entidade corrente
+            rotated.copyTo(workingImg);
+        }
 
         // Recarregar visualização
         loadCurrentEntityToView();
@@ -1338,7 +1383,6 @@ void MainWindow::rotateCustomAngle() {
         statusLabel->setText(QString("Imagem rotacionada %1°").arg(angle, 0, 'f', 1));
 
         // Marcar como modificado
-        using PM = FingerprintEnhancer::ProjectManager;
         PM::instance().getCurrentProject()->setModified();
     } else {
         statusLabel->setText("Rotação cancelada");
@@ -2229,6 +2273,15 @@ void MainWindow::loadCurrentEntityToView() {
     if (currentEntityType == ENTITY_FRAGMENT && fragment) {
         minutiaeOverlay->setFragment(fragment);
         minutiaeOverlay->setScaleFactor(processedImageViewer->getScaleFactor());
+
+        // Inicializar scroll offset
+        QPoint scrollOffset(processedImageViewer->horizontalScrollBar()->value(),
+                           processedImageViewer->verticalScrollBar()->value());
+        minutiaeOverlay->setScrollOffset(scrollOffset);
+
+        // Inicializar image offset (centralização)
+        minutiaeOverlay->setImageOffset(processedImageViewer->getImageOffset());
+
         minutiaeOverlay->raise();
         minutiaeOverlay->update();
     } else {
@@ -2282,16 +2335,40 @@ void MainWindow::applyOperationToCurrentEntity(std::function<void(cv::Mat&)> ope
 // ========== Espelhamento ==========
 
 void MainWindow::flipHorizontal() {
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        cv::flip(img, img, 1); // 1 = horizontal
-    });
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_FRAGMENT && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (frag) {
+            int imageWidth = frag->workingImage.cols;
+            cv::flip(frag->workingImage, frag->workingImage, 1); // 1 = horizontal
+            frag->flipMinutiaeHorizontal(imageWidth);
+            loadCurrentEntityToView();
+        }
+    } else {
+        applyOperationToCurrentEntity([](cv::Mat& img) {
+            cv::flip(img, img, 1); // 1 = horizontal
+        });
+    }
     statusLabel->setText("Espelhamento horizontal aplicado");
 }
 
 void MainWindow::flipVertical() {
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        cv::flip(img, img, 0); // 0 = vertical
-    });
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_FRAGMENT && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (frag) {
+            int imageHeight = frag->workingImage.rows;
+            cv::flip(frag->workingImage, frag->workingImage, 0); // 0 = vertical
+            frag->flipMinutiaeVertical(imageHeight);
+            loadCurrentEntityToView();
+        }
+    } else {
+        applyOperationToCurrentEntity([](cv::Mat& img) {
+            cv::flip(img, img, 0); // 0 = vertical
+        });
+    }
     statusLabel->setText("Espelhamento vertical aplicado");
 }
 

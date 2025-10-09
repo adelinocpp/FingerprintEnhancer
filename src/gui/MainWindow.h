@@ -219,10 +219,8 @@ private:
     // Layout central
     QWidget *centralWidget;
     QSplitter *mainSplitter;
-    QSplitter *imageSplitter;
-    
+
     // Visualizadores de imagem
-    ImageViewer *originalImageViewer;
     ImageViewer *processedImageViewer;
     MinutiaeEditor *minutiaeEditor;
     

@@ -21,6 +21,8 @@ public:
 
     void setFragment(Fragment* fragment);
     void setScaleFactor(double scale);
+    void setScrollOffset(const QPoint& offset);
+    void setImageOffset(const QPoint& offset);  // Offset de centralização da imagem
     void clearMinutiae();
 
     // Controle de seleção
@@ -52,6 +54,8 @@ protected:
 private:
     Fragment* currentFragment;
     double scaleFactor;
+    QPoint scrollOffset;
+    QPoint imageOffset;  // Offset de centralização da imagem
     QString selectedMinutiaId;
     bool editMode;
     bool draggingMinutia;

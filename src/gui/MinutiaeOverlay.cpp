@@ -9,6 +9,8 @@ MinutiaeOverlay::MinutiaeOverlay(QWidget *parent)
     : QWidget(parent),
       currentFragment(nullptr),
       scaleFactor(1.0),
+      scrollOffset(0, 0),
+      imageOffset(0, 0),
       editMode(false),
       draggingMinutia(false),
       showLabels(true),
@@ -31,6 +33,16 @@ void MinutiaeOverlay::setFragment(Fragment* fragment) {
 
 void MinutiaeOverlay::setScaleFactor(double scale) {
     scaleFactor = scale;
+    update();
+}
+
+void MinutiaeOverlay::setScrollOffset(const QPoint& offset) {
+    scrollOffset = offset;
+    update();
+}
+
+void MinutiaeOverlay::setImageOffset(const QPoint& offset) {
+    imageOffset = offset;
     update();
 }
 
@@ -229,16 +241,22 @@ Minutia* MinutiaeOverlay::findMinutiaAt(const QPoint& pos) {
 }
 
 QPoint MinutiaeOverlay::scalePoint(const QPoint& imagePoint) const {
+    // 1. Escalar coordenadas da imagem
+    // 2. Adicionar offset de centralização
+    // 3. Subtrair offset de scroll
     return QPoint(
-        static_cast<int>(imagePoint.x() * scaleFactor),
-        static_cast<int>(imagePoint.y() * scaleFactor)
+        static_cast<int>(imagePoint.x() * scaleFactor) + imageOffset.x() - scrollOffset.x(),
+        static_cast<int>(imagePoint.y() * scaleFactor) + imageOffset.y() - scrollOffset.y()
     );
 }
 
 QPoint MinutiaeOverlay::unscalePoint(const QPoint& widgetPoint) const {
+    // 1. Adicionar offset de scroll
+    // 2. Subtrair offset de centralização
+    // 3. Descalar para coordenadas da imagem
     return QPoint(
-        static_cast<int>(widgetPoint.x() / scaleFactor),
-        static_cast<int>(widgetPoint.y() / scaleFactor)
+        static_cast<int>((widgetPoint.x() + scrollOffset.x() - imageOffset.x()) / scaleFactor),
+        static_cast<int>((widgetPoint.y() + scrollOffset.y() - imageOffset.y()) / scaleFactor)
     );
 }
 
