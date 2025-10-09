@@ -3,6 +3,7 @@
 #include "RotationDialog.h"
 #include "MinutiaEditDialog.h"
 #include "FFTFilterDialog.h"
+#include "ColorConversionDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -1441,66 +1442,107 @@ void MainWindow::showScaleInfo() {
 // ==================== CONVERSÃO DE ESPAÇOS DE COR ====================
 
 void MainWindow::convertToRGB() {
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        if (img.channels() == 1) {
-            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
-        } else if (img.channels() == 4) {
-            cv::cvtColor(img, img, cv::COLOR_BGRA2BGR);
-        }
-        // Se já está em BGR (RGB do OpenCV), não fazer nada
-    });
-    statusLabel->setText("Convertido para RGB");
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Conversão RGB", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
+
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) {
+        QMessageBox::warning(this, "Conversão RGB", "Imagem inválida");
+        return;
+    }
+
+    ColorConversionDialog dialog(workingImg, COLOR_SPACE_RGB, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        cv::Mat converted = dialog.getConvertedImage();
+        converted.copyTo(workingImg);
+        loadCurrentEntityToView();
+        statusLabel->setText("Convertido para RGB com ajustes aplicados");
+        PM::instance().getCurrentProject()->setModified();
+    } else {
+        statusLabel->setText("Conversão RGB cancelada");
+    }
 }
 
 void MainWindow::convertToHSV() {
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        if (img.channels() == 1) {
-            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
-        }
-        if (img.channels() == 3) {
-            cv::cvtColor(img, img, cv::COLOR_BGR2HSV);
-        }
-    });
-    statusLabel->setText("Convertido para HSV");
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Conversão HSV", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
+
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) {
+        QMessageBox::warning(this, "Conversão HSV", "Imagem inválida");
+        return;
+    }
+
+    ColorConversionDialog dialog(workingImg, COLOR_SPACE_HSV, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        cv::Mat converted = dialog.getConvertedImage();
+        converted.copyTo(workingImg);
+        loadCurrentEntityToView();
+        statusLabel->setText("Convertido para HSV com ajustes aplicados");
+        PM::instance().getCurrentProject()->setModified();
+    } else {
+        statusLabel->setText("Conversão HSV cancelada");
+    }
 }
 
 void MainWindow::convertToHSI() {
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        if (img.channels() == 1) {
-            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
-        }
-        if (img.channels() == 3) {
-            // OpenCV não tem conversão direta para HSI
-            // Converter para HSV e modificar canal V para I (Intensity)
-            cv::Mat hsv;
-            cv::cvtColor(img, hsv, cv::COLOR_BGR2HSV);
+    using PM = FingerprintEnhancer::ProjectManager;
 
-            // Calcular Intensity como média dos canais BGR
-            std::vector<cv::Mat> bgrChannels;
-            cv::split(img, bgrChannels);
-            cv::Mat intensity = (bgrChannels[0] + bgrChannels[1] + bgrChannels[2]) / 3;
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Conversão HSI", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
 
-            // Substituir canal V por I
-            std::vector<cv::Mat> hsiChannels;
-            cv::split(hsv, hsiChannels);
-            hsiChannels[2] = intensity;
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) {
+        QMessageBox::warning(this, "Conversão HSI", "Imagem inválida");
+        return;
+    }
 
-            cv::merge(hsiChannels, img);
-        }
-    });
-    statusLabel->setText("Convertido para HSI (aproximado)");
+    ColorConversionDialog dialog(workingImg, COLOR_SPACE_HSI, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        cv::Mat converted = dialog.getConvertedImage();
+        converted.copyTo(workingImg);
+        loadCurrentEntityToView();
+        statusLabel->setText("Convertido para HSI com ajustes aplicados");
+        PM::instance().getCurrentProject()->setModified();
+    } else {
+        statusLabel->setText("Conversão HSI cancelada");
+    }
 }
 
 void MainWindow::convertToLab() {
-    applyOperationToCurrentEntity([](cv::Mat& img) {
-        if (img.channels() == 1) {
-            cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
-        }
-        if (img.channels() == 3) {
-            cv::cvtColor(img, img, cv::COLOR_BGR2Lab);
-        }
-    });
-    statusLabel->setText("Convertido para Lab");
+    using PM = FingerprintEnhancer::ProjectManager;
+
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Conversão Lab", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
+
+    cv::Mat& workingImg = getCurrentWorkingImage();
+    if (workingImg.empty()) {
+        QMessageBox::warning(this, "Conversão Lab", "Imagem inválida");
+        return;
+    }
+
+    ColorConversionDialog dialog(workingImg, COLOR_SPACE_LAB, this);
+    if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        cv::Mat converted = dialog.getConvertedImage();
+        converted.copyTo(workingImg);
+        loadCurrentEntityToView();
+        statusLabel->setText("Convertido para Lab com ajustes aplicados");
+        PM::instance().getCurrentProject()->setModified();
+    } else {
+        statusLabel->setText("Conversão Lab cancelada");
+    }
 }
 
 void MainWindow::convertToGrayscale() {
