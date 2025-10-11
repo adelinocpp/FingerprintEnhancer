@@ -1275,12 +1275,12 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                     menu.addAction("📐 Destacar Imagem Inteira como Fragmento",
                                          this, &MainWindow::createFragmentFromWholeImage);
                 } else if (currentEntityType == ENTITY_FRAGMENT) {
+                    menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
+                        addMinutiaQuickly(imagePos);
+                    });
                     menu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
                         setToolMode(TOOL_ADD_MINUTIA);
                         addMinutiaAtPosition(imagePos);
-                    });
-                    menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
-                        addMinutiaQuickly(imagePos);
                     });
                 }
                 break;
@@ -1299,11 +1299,11 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
 
             case TOOL_ADD_MINUTIA:
                 if (currentEntityType == ENTITY_FRAGMENT) {
-                    menu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
-                        addMinutiaAtPosition(imagePos);
-                    });
                     menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
                         addMinutiaQuickly(imagePos);
+                    });
+                    menu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
+                        addMinutiaAtPosition(imagePos);
                     });
                 }
                 break;
@@ -1998,12 +1998,12 @@ void MainWindow::showContextMenu(const QPoint &pos) {
                 contextMenu.addAction("📐 Destacar Imagem Inteira como Fragmento",
                                      this, &MainWindow::createFragmentFromWholeImage);
             } else if (currentEntityType == ENTITY_FRAGMENT) {
+                contextMenu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
+                    addMinutiaQuickly(imagePos);
+                });
                 contextMenu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
                     setToolMode(TOOL_ADD_MINUTIA);
                     addMinutiaAtPosition(imagePos);
-                });
-                contextMenu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
-                    addMinutiaQuickly(imagePos);
                 });
             } else {
                 contextMenu.addAction("Selecione uma imagem ou fragmento primeiro");
@@ -2024,11 +2024,11 @@ void MainWindow::showContextMenu(const QPoint &pos) {
 
         case TOOL_ADD_MINUTIA:
             if (currentEntityType == ENTITY_FRAGMENT) {
-                contextMenu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
-                    addMinutiaAtPosition(imagePos);
-                });
                 contextMenu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
                     addMinutiaQuickly(imagePos);
+                });
+                contextMenu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
+                    addMinutiaAtPosition(imagePos);
                 });
             } else {
                 contextMenu.addAction("Selecione um fragmento primeiro");
