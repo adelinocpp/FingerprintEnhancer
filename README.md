@@ -412,9 +412,9 @@ Este projeto está licenciado sob a **Apache License 2.0**. Veja o arquivo [LICE
 
 ## 📞 Suporte
 
-- **Issues**: [GitHub Issues](https://github.com/seu-usuario/FingerprintEnhancer/issues)
+- **Issues**: [GitHub Issues](https://github.com/adelinocpp/FingerprintEnhancer/issues)
 - **Documentação**: Consulte a pasta `docs/`
-- **Email**: developer@fingerprintenhancer.org
+- **Email**: adelinocpp@yahoo.com
 
 ---
 
@@ -426,6 +426,8 @@ Este projeto está licenciado sob a **Apache License 2.0**. Veja o arquivo [LICE
 
 ---
 
-**Desenvolvido com ❤️ para a comunidade forense**
+**Desenvolvido com ❤️ para a Seção Técnica de Papiloscopia e Modelagem**
 
-*Última atualização: Janeiro 2025*
+**Instituto de Criminalística de Minas Gerais**
+
+*Última atualização: Outubro 2025*
