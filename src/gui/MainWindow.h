@@ -75,6 +75,8 @@ private slots:
     void openProject();
     void saveProject();
     void saveProjectAs();
+    void editProjectInfo();
+    void clearProject();
     void openImage();
     void saveImage();
     void exportReport();
@@ -186,12 +188,19 @@ private slots:
     // Slots para gerenciamento de projeto
     void onProjectModified();
     void onImageAdded(const QString& imageId);
+    void onImageSelected(const QString& imageId);
     void onFragmentCreated(const QString& fragmentId);
     void onFragmentSelected(const QString& fragmentId);
     void onMinutiaAdded(const QString& minutiaId);
     void onMinutiaSelected(const QString& minutiaId);
     void onMinutiaDoubleClicked(const QString& minutiaId);
     void onMinutiaPositionChanged(const QString& minutiaId, const QPoint& newPos);
+    void onDeleteImageRequested(const QString& imageId);
+    void onSendToLeftPanel(const QString& entityId, bool isFragment);
+    void onSendToRightPanel(const QString& entityId, bool isFragment);
+    void onDuplicateFragmentRequested(const QString& fragmentId);
+    void onExportImageRequested(const QString& imageId);
+    void onExportFragmentRequested(const QString& fragmentId);
 
     // Slots para ferramentas
     void setToolMode(ToolMode mode);

@@ -3,11 +3,12 @@
 #include <QMessageBox>
 #include <QFileInfo>
 #include <QMenu>
+#include <QEvent>
 
 namespace FingerprintEnhancer {
 
 FragmentManager::FragmentManager(QWidget *parent)
-    : QWidget(parent), currentProject(nullptr)
+    : QWidget(parent), currentProject(nullptr), currentFilter(FILTER_ALL)
 {
     setupUI();
 }
@@ -20,6 +21,21 @@ void FragmentManager::setupUI() {
     infoLabel->setStyleSheet("QLabel { background-color: #e0e0e0; padding: 8px; border-radius: 4px; font-weight: bold; }");
     mainLayout->addWidget(infoLabel);
 
+    // Filtro
+    QHBoxLayout* filterLayout = new QHBoxLayout();
+    QLabel* filterLabel = new QLabel("Filtrar:", this);
+    filterLayout->addWidget(filterLabel);
+    
+    filterCombo = new QComboBox(this);
+    filterCombo->addItem("🔍 Todos os itens", FILTER_ALL);
+    filterCombo->addItem("📁 Com fragmentos", FILTER_WITH_FRAGMENTS);
+    filterCombo->addItem("📍 Com minúcias", FILTER_WITH_MINUTIAE);
+    filterCombo->addItem("⚪ Sem minúcias", FILTER_WITHOUT_MINUTIAE);
+    connect(filterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &FragmentManager::onFilterChanged);
+    filterLayout->addWidget(filterCombo, 1);
+    
+    mainLayout->addLayout(filterLayout);
+
     // Árvore hierárquica
     hierarchyTree = new QTreeWidget(this);
     hierarchyTree->setHeaderLabels({"Nome", "Detalhes"});
@@ -27,6 +43,7 @@ void FragmentManager::setupUI() {
     hierarchyTree->setAlternatingRowColors(true);
     hierarchyTree->setSelectionMode(QAbstractItemView::SingleSelection);
     hierarchyTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    hierarchyTree->installEventFilter(this);  // Para capturar teclas
     connect(hierarchyTree, &QTreeWidget::itemSelectionChanged, this, &FragmentManager::onTreeItemSelectionChanged);
     connect(hierarchyTree, &QTreeWidget::customContextMenuRequested, this, &FragmentManager::onTreeContextMenu);
     mainLayout->addWidget(hierarchyTree);
@@ -67,6 +84,24 @@ void FragmentManager::setupUI() {
 
     imageButtonLayout->addStretch();
     mainLayout->addLayout(imageButtonLayout);
+    
+    // Terceira linha - Duplicar e Exportar
+    QHBoxLayout* utilityButtonLayout = new QHBoxLayout();
+    
+    duplicateBtn = new QPushButton("📋 Duplicar", this);
+    duplicateBtn->setEnabled(false);
+    duplicateBtn->setToolTip("Duplicar fragmento selecionado (Ctrl+D)");
+    connect(duplicateBtn, &QPushButton::clicked, this, &FragmentManager::onDuplicateFragment);
+    utilityButtonLayout->addWidget(duplicateBtn);
+    
+    exportBtn = new QPushButton("💾 Exportar", this);
+    exportBtn->setEnabled(false);
+    exportBtn->setToolTip("Exportar imagem ou fragmento selecionado (Ctrl+E)");
+    connect(exportBtn, &QPushButton::clicked, this, &FragmentManager::onExportSelected);
+    utilityButtonLayout->addWidget(exportBtn);
+    
+    utilityButtonLayout->addStretch();
+    mainLayout->addLayout(utilityButtonLayout);
 
     setLayout(mainLayout);
 }
@@ -102,11 +137,34 @@ void FragmentManager::buildHierarchyTree() {
     if (!currentProject) return;
 
     for (const auto& image : currentProject->images) {
+        // Aplicar filtros
+        bool showImage = true;
+        
+        if (currentFilter == FILTER_WITH_FRAGMENTS && image.fragments.empty()) {
+            showImage = false;
+        } else if (currentFilter == FILTER_WITH_MINUTIAE && image.getTotalMinutiaeCount() == 0) {
+            showImage = false;
+        } else if (currentFilter == FILTER_WITHOUT_MINUTIAE && image.getTotalMinutiaeCount() > 0) {
+            showImage = false;
+        }
+        
+        if (!showImage) continue;
+        
         QTreeWidgetItem* imageItem = createImageItem(image);
         hierarchyTree->addTopLevelItem(imageItem);
 
         int fragIndex = 1;
         for (const auto& fragment : image.fragments) {
+            bool showFragment = true;
+            
+            if (currentFilter == FILTER_WITH_MINUTIAE && fragment.getMinutiaeCount() == 0) {
+                showFragment = false;
+            } else if (currentFilter == FILTER_WITHOUT_MINUTIAE && fragment.getMinutiaeCount() > 0) {
+                showFragment = false;
+            }
+            
+            if (!showFragment) continue;
+            
             QTreeWidgetItem* fragmentItem = createFragmentItem(fragment, fragIndex);
             imageItem->addChild(fragmentItem);
 
@@ -190,6 +248,8 @@ void FragmentManager::onTreeItemSelectionChanged() {
         infoBtn->setEnabled(false);
         viewOriginalBtn->setEnabled(false);
         resetWorkingBtn->setEnabled(false);
+        duplicateBtn->setEnabled(false);
+        exportBtn->setEnabled(false);
         return;
     }
 
@@ -202,6 +262,8 @@ void FragmentManager::onTreeItemSelectionChanged() {
         infoBtn->setEnabled(false);
         viewOriginalBtn->setEnabled(true);
         resetWorkingBtn->setEnabled(true);
+        duplicateBtn->setEnabled(false);
+        exportBtn->setEnabled(true);
         emit imageSelected(imageId);
 
     } else if (itemType == "FRAGMENT") {
@@ -211,6 +273,8 @@ void FragmentManager::onTreeItemSelectionChanged() {
         infoBtn->setEnabled(false);
         viewOriginalBtn->setEnabled(true);
         resetWorkingBtn->setEnabled(true);
+        duplicateBtn->setEnabled(true);
+        exportBtn->setEnabled(true);
         emit fragmentSelected(fragmentId);
 
     } else if (itemType == "MINUTIA") {
@@ -220,6 +284,8 @@ void FragmentManager::onTreeItemSelectionChanged() {
         infoBtn->setEnabled(true);
         viewOriginalBtn->setEnabled(false);
         resetWorkingBtn->setEnabled(false);
+        duplicateBtn->setEnabled(false);
+        exportBtn->setEnabled(false);
         emit minutiaSelected(minutiaId);
     }
 }
@@ -420,8 +486,13 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
             emit resetWorkingImageRequested(entityId, isFragment);
         });
 
-        if (itemType == "FRAGMENT") {
-            menu.addSeparator();
+        menu.addSeparator();
+
+        if (itemType == "IMAGE") {
+            menu.addAction("🗑 Remover Imagem", [this, entityId]() {
+                emit deleteImageRequested(entityId);
+            });
+        } else if (itemType == "FRAGMENT") {
             menu.addAction("🗑 Excluir Fragmento", [this, entityId]() {
                 emit deleteFragmentRequested(entityId);
             });
@@ -436,7 +507,117 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
         });
     }
 
+    // Adicionar opções de duplicar e exportar
+    if (itemType == "FRAGMENT") {
+        menu.addSeparator();
+        menu.addAction("📋 Duplicar Fragmento (Ctrl+D)", [this, entityId]() {
+            emit duplicateFragmentRequested(entityId);
+        });
+        menu.addAction("💾 Exportar Fragmento (Ctrl+E)", [this, entityId]() {
+            emit exportFragmentRequested(entityId);
+        });
+    } else if (itemType == "IMAGE") {
+        menu.addSeparator();
+        menu.addAction("💾 Exportar Imagem (Ctrl+E)", [this, entityId]() {
+            emit exportImageRequested(entityId);
+        });
+    }
+
     menu.exec(hierarchyTree->mapToGlobal(pos));
+}
+
+void FragmentManager::onDuplicateFragment() {
+    QTreeWidgetItem* item = hierarchyTree->currentItem();
+    if (!item) return;
+
+    QString itemType = item->data(0, Qt::UserRole).toString();
+    if (itemType == "FRAGMENT") {
+        QString fragmentId = item->data(0, Qt::UserRole + 1).toString();
+        emit duplicateFragmentRequested(fragmentId);
+    }
+}
+
+void FragmentManager::onExportSelected() {
+    QTreeWidgetItem* item = hierarchyTree->currentItem();
+    if (!item) return;
+
+    QString itemType = item->data(0, Qt::UserRole).toString();
+    QString entityId = item->data(0, Qt::UserRole + 1).toString();
+
+    if (itemType == "IMAGE") {
+        emit exportImageRequested(entityId);
+    } else if (itemType == "FRAGMENT") {
+        emit exportFragmentRequested(entityId);
+    }
+}
+
+void FragmentManager::onFilterChanged() {
+    int index = filterCombo->currentIndex();
+    currentFilter = static_cast<FilterType>(filterCombo->itemData(index).toInt());
+    updateView();
+}
+
+bool FragmentManager::eventFilter(QObject* obj, QEvent* event) {
+    if (obj == hierarchyTree && event->type() == QEvent::KeyPress) {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+        
+        // Ctrl+D - Duplicar
+        if (keyEvent->modifiers() & Qt::ControlModifier && keyEvent->key() == Qt::Key_D) {
+            onDuplicateFragment();
+            return true;
+        }
+        
+        // Ctrl+E - Exportar
+        if (keyEvent->modifiers() & Qt::ControlModifier && keyEvent->key() == Qt::Key_E) {
+            onExportSelected();
+            return true;
+        }
+        
+        // Delete - Excluir
+        if (keyEvent->key() == Qt::Key_Delete) {
+            onDeleteSelected();
+            return true;
+        }
+        
+        // Enter - Tornar corrente
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            QTreeWidgetItem* item = hierarchyTree->currentItem();
+            if (item) {
+                QString itemType = item->data(0, Qt::UserRole).toString();
+                QString entityId = item->data(0, Qt::UserRole + 1).toString();
+                
+                if (itemType == "IMAGE") {
+                    emit makeCurrentRequested(entityId, false);
+                } else if (itemType == "FRAGMENT") {
+                    emit makeCurrentRequested(entityId, true);
+                }
+            }
+            return true;
+        }
+        
+        // Setas Esquerda/Direita com Ctrl - Enviar para painéis
+        if (keyEvent->modifiers() & Qt::ControlModifier) {
+            QTreeWidgetItem* item = hierarchyTree->currentItem();
+            if (item) {
+                QString itemType = item->data(0, Qt::UserRole).toString();
+                QString entityId = item->data(0, Qt::UserRole + 1).toString();
+                
+                if (itemType == "IMAGE" || itemType == "FRAGMENT") {
+                    bool isFragment = (itemType == "FRAGMENT");
+                    
+                    if (keyEvent->key() == Qt::Key_Left) {
+                        emit sendToLeftPanelRequested(entityId, isFragment);
+                        return true;
+                    } else if (keyEvent->key() == Qt::Key_Right) {
+                        emit sendToRightPanelRequested(entityId, isFragment);
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    
+    return QWidget::eventFilter(obj, event);
 }
 
 } // namespace FingerprintEnhancer

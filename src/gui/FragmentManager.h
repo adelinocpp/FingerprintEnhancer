@@ -10,6 +10,8 @@
 #include <QLabel>
 #include <QGroupBox>
 #include <QSplitter>
+#include <QComboBox>
+#include <QKeyEvent>
 #include "../core/ProjectModel.h"
 
 namespace FingerprintEnhancer {
@@ -39,6 +41,7 @@ signals:
 
     void createFragmentRequested(const QString& imageId);
     void editMinutiaRequested(const QString& minutiaId);
+    void deleteImageRequested(const QString& imageId);
     void deleteFragmentRequested(const QString& fragmentId);
     void deleteMinutiaRequested(const QString& minutiaId);
 
@@ -48,6 +51,10 @@ signals:
     void makeCurrentRequested(const QString& entityId, bool isFragment);
     void sendToLeftPanelRequested(const QString& entityId, bool isFragment);
     void sendToRightPanelRequested(const QString& entityId, bool isFragment);
+    
+    void duplicateFragmentRequested(const QString& fragmentId);
+    void exportImageRequested(const QString& imageId);
+    void exportFragmentRequested(const QString& fragmentId);
 
 private slots:
     void onTreeItemSelectionChanged();
@@ -57,6 +64,9 @@ private slots:
     void onShowMinutiaInfo();
     void onViewOriginal();
     void onResetWorkingImage();
+    void onDuplicateFragment();
+    void onExportSelected();
+    void onFilterChanged();
 
 private:
     Project* currentProject;
@@ -69,6 +79,13 @@ private:
     QPushButton* infoBtn;
     QPushButton* viewOriginalBtn;
     QPushButton* resetWorkingBtn;
+    QPushButton* duplicateBtn;
+    QPushButton* exportBtn;
+    
+    // Filtros
+    QComboBox* filterCombo;
+    enum FilterType { FILTER_ALL, FILTER_WITH_FRAGMENTS, FILTER_WITH_MINUTIAE, FILTER_WITHOUT_MINUTIAE };
+    FilterType currentFilter;
 
     void setupUI();
     void updateProjectInfo();
@@ -78,6 +95,9 @@ private:
     QTreeWidgetItem* createImageItem(const FingerprintImage& image);
     QTreeWidgetItem* createFragmentItem(const Fragment& fragment, int index);
     QTreeWidgetItem* createMinutiaItem(const Minutia& minutia, int index);
+    
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
 };
 
 } // namespace FingerprintEnhancer
