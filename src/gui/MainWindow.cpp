@@ -189,6 +189,27 @@ void MainWindow::createMenus() {
     // Submenu de Minúcias
     QMenu *minutiaeMenu = toolsMenu->addMenu("&Minúcias");
     minutiaeMenu->addAction("&Adicionar Minúcia Manual", this, &MainWindow::activateAddMinutia, QKeySequence("Ctrl+M"));
+    
+    // Modo de edição interativa
+    QAction* editModeAction = minutiaeMenu->addAction("🎯 Modo de Edição &Interativa", this, [this](bool checked) {
+        if (leftMinutiaeOverlay) {
+            leftMinutiaeOverlay->setEditMode(checked);
+        }
+        if (rightMinutiaeOverlay) {
+            rightMinutiaeOverlay->setEditMode(checked);
+        }
+        if (checked) {
+            statusLabel->setText("Modo de edição interativa ATIVADO - Clique em uma minúcia para editar");
+        } else {
+            statusLabel->setText("Modo de edição interativa DESATIVADO");
+        }
+    });
+    editModeAction->setCheckable(true);
+    editModeAction->setChecked(false);
+    editModeAction->setShortcut(QKeySequence("Ctrl+I"));
+    editModeAction->setToolTip("Ativar modo de edição interativa: clique para selecionar, arraste para mover/rotacionar");
+    
+    minutiaeMenu->addSeparator();
     minutiaeMenu->addAction("&Editar Minúcia", this, &MainWindow::activateEditMinutia);
     minutiaeMenu->addAction("&Remover Minúcia", this, &MainWindow::activateRemoveMinutia);
     minutiaeMenu->addSeparator();
@@ -544,10 +565,14 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onMinutiaDoubleClicked);
     connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
             this, &MainWindow::onMinutiaPositionChanged);
+    connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::angleChanged,
+            this, &MainWindow::onMinutiaAngleChanged);
     connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDoubleClicked,
             this, &MainWindow::onMinutiaDoubleClicked);
     connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
             this, &MainWindow::onMinutiaPositionChanged);
+    connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::angleChanged,
+            this, &MainWindow::onMinutiaAngleChanged);
 
     // Manter compatibilidade com overlay antigo
     minutiaeOverlay = leftMinutiaeOverlay;
@@ -2645,6 +2670,23 @@ void MainWindow::onMinutiaDoubleClicked(const QString& minutiaId) {
 void MainWindow::onMinutiaPositionChanged(const QString& minutiaId, const QPoint& newPos) {
     using PM = FingerprintEnhancer::ProjectManager;
     PM::instance().updateMinutiaPosition(minutiaId, newPos);
+}
+
+void MainWindow::onMinutiaAngleChanged(const QString& minutiaId, float newAngle) {
+    using PM = FingerprintEnhancer::ProjectManager;
+    
+    FingerprintEnhancer::Minutia* minutia = PM::instance().getCurrentProject()->findMinutia(minutiaId);
+    if (minutia) {
+        minutia->angle = newAngle;
+        minutia->modifiedAt = QDateTime::currentDateTime();
+        PM::instance().getCurrentProject()->setModified();
+        
+        // Atualizar ambos os overlays
+        leftMinutiaeOverlay->update();
+        rightMinutiaeOverlay->update();
+        
+        statusLabel->setText(QString("Ângulo da minúcia: %1°").arg(static_cast<int>(newAngle)));
+    }
 }
 
 // ========== Gerenciamento de Ferramentas ==========

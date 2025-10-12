@@ -195,6 +195,7 @@ private slots:
     void onMinutiaSelected(const QString& minutiaId);
     void onMinutiaDoubleClicked(const QString& minutiaId);
     void onMinutiaPositionChanged(const QString& minutiaId, const QPoint& newPos);
+    void onMinutiaAngleChanged(const QString& minutiaId, float newAngle);
     void onDeleteImageRequested(const QString& imageId);
     void onSendToLeftPanel(const QString& entityId, bool isFragment);
     void onSendToRightPanel(const QString& entityId, bool isFragment);
