@@ -108,7 +108,7 @@ private:
     // Helper functions
     void drawMinutia(QPainter& painter, const Minutia& minutia, bool isSelected);
     void drawMinutiaWithArrow(QPainter& painter, const QPoint& pos, float angle, const QColor& color, bool isSelected);
-    void drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected);
+    void drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected, MinutiaLabelPosition labelPos = MinutiaLabelPosition::RIGHT);
     void drawEditStateIndicator(QPainter& painter, const QPoint& pos);
 
     Minutia* findMinutiaAt(const QPoint& pos);

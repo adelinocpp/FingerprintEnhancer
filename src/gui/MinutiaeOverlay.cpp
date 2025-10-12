@@ -96,7 +96,7 @@ void MinutiaeOverlay::paintEvent(QPaintEvent *event) {
         }
 
         if (showLabels) {
-            drawMinutiaLabel(painter, scaledPos, number, minutia.getTypeAbbreviation(), isSelected);
+            drawMinutiaLabel(painter, scaledPos, number, minutia.getTypeAbbreviation(), isSelected, minutia.labelPosition);
         }
 
         number++;
@@ -218,7 +218,12 @@ void MinutiaeOverlay::drawMinutia(QPainter& painter, const Minutia& minutia, boo
 }
 
 
-void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected) {
+void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected, MinutiaLabelPosition labelPos) {
+    // Se oculto, não desenhar
+    if (labelPos == MinutiaLabelPosition::HIDDEN) {
+        return;
+    }
+    
     QColor textColor = isSelected ? selectedColor : normalColor;
     QFont font = painter.font();
     font.setPointSize(displaySettings.labelFontSize);
@@ -226,11 +231,30 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
     painter.setFont(font);
 
     int size = displaySettings.markerSize;
+    int margin = 5;
 
     // Desenhar número com espaços
     QString label = QString(" %1 .").arg(number);
     QRect textRect = painter.fontMetrics().boundingRect(label);
-    QPoint textPos(pos.x() + size/2 + 5, pos.y() - size/2);
+    QPoint textPos;
+    
+    // Calcular posição baseado em labelPos
+    switch (labelPos) {
+        case MinutiaLabelPosition::RIGHT:
+            textPos = QPoint(pos.x() + size/2 + margin, pos.y() - size/2);
+            break;
+        case MinutiaLabelPosition::LEFT:
+            textPos = QPoint(pos.x() - size/2 - margin - textRect.width(), pos.y() - size/2);
+            break;
+        case MinutiaLabelPosition::ABOVE:
+            textPos = QPoint(pos.x() - textRect.width()/2, pos.y() - size/2 - margin - textRect.height());
+            break;
+        case MinutiaLabelPosition::BELOW:
+            textPos = QPoint(pos.x() - textRect.width()/2, pos.y() + size/2 + margin + textRect.height());
+            break;
+        default:
+            textPos = QPoint(pos.x() + size/2 + margin, pos.y() - size/2);
+    }
 
     // Fundo configurável para melhor legibilidade
     painter.fillRect(textRect.translated(textPos), displaySettings.labelBackgroundColor);
@@ -240,8 +264,27 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
     // Desenhar tipo (abreviação) com espaços
     if (!type.isEmpty() && type != "N/C") {
         QString typeLabel = QString(" %1 .").arg(type);
-        QPoint typePos(pos.x() + size/2 + 5, pos.y() + 5);
         QRect typeRect = painter.fontMetrics().boundingRect(typeLabel);
+        QPoint typePos;
+        
+        // Tipo sempre abaixo do número
+        switch (labelPos) {
+            case MinutiaLabelPosition::RIGHT:
+                typePos = QPoint(pos.x() + size/2 + margin, pos.y() + 5);
+                break;
+            case MinutiaLabelPosition::LEFT:
+                typePos = QPoint(pos.x() - size/2 - margin - typeRect.width(), pos.y() + 5);
+                break;
+            case MinutiaLabelPosition::ABOVE:
+                typePos = QPoint(pos.x() - typeRect.width()/2, pos.y() - size/2 - margin - textRect.height() - typeRect.height() - 2);
+                break;
+            case MinutiaLabelPosition::BELOW:
+                typePos = QPoint(pos.x() - typeRect.width()/2, pos.y() + size/2 + margin + textRect.height() + typeRect.height() + 2);
+                break;
+            default:
+                typePos = QPoint(pos.x() + size/2 + margin, pos.y() + 5);
+        }
+        
         painter.fillRect(typeRect.translated(typePos), displaySettings.labelBackgroundColor);
         painter.drawText(typePos, typeLabel);
     }
@@ -392,6 +435,31 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
     
     menu.addSeparator();
     
+    // Submenu de posição do rótulo
+    QMenu* labelPosMenu = menu.addMenu("📍 Posição do Rótulo");
+    QAction* labelRightAction = labelPosMenu->addAction("→ À Direita");
+    QAction* labelLeftAction = labelPosMenu->addAction("← À Esquerda");
+    QAction* labelAboveAction = labelPosMenu->addAction("↑ Acima");
+    QAction* labelBelowAction = labelPosMenu->addAction("↓ Abaixo");
+    QAction* labelHiddenAction = labelPosMenu->addAction("⊗ Oculto");
+    
+    // Marcar posição atual
+    labelRightAction->setCheckable(true);
+    labelLeftAction->setCheckable(true);
+    labelAboveAction->setCheckable(true);
+    labelBelowAction->setCheckable(true);
+    labelHiddenAction->setCheckable(true);
+    
+    switch (minutia->labelPosition) {
+        case MinutiaLabelPosition::RIGHT: labelRightAction->setChecked(true); break;
+        case MinutiaLabelPosition::LEFT: labelLeftAction->setChecked(true); break;
+        case MinutiaLabelPosition::ABOVE: labelAboveAction->setChecked(true); break;
+        case MinutiaLabelPosition::BELOW: labelBelowAction->setChecked(true); break;
+        case MinutiaLabelPosition::HIDDEN: labelHiddenAction->setChecked(true); break;
+    }
+    
+    menu.addSeparator();
+    
     QAction* editAction = menu.addAction("✏️ Editar Propriedades...");
     QAction* deleteAction = menu.addAction("🗑 Excluir Minúcia");
     
@@ -421,6 +489,21 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
     } else if (selectedAction == deleteAction) {
         // Emitir sinal para deletar (será capturado pelo MainWindow)
         clearSelection();
+    } else if (selectedAction == labelRightAction) {
+        minutia->labelPosition = MinutiaLabelPosition::RIGHT;
+        update();
+    } else if (selectedAction == labelLeftAction) {
+        minutia->labelPosition = MinutiaLabelPosition::LEFT;
+        update();
+    } else if (selectedAction == labelAboveAction) {
+        minutia->labelPosition = MinutiaLabelPosition::ABOVE;
+        update();
+    } else if (selectedAction == labelBelowAction) {
+        minutia->labelPosition = MinutiaLabelPosition::BELOW;
+        update();
+    } else if (selectedAction == labelHiddenAction) {
+        minutia->labelPosition = MinutiaLabelPosition::HIDDEN;
+        update();
     }
 }
 

@@ -13,6 +13,7 @@
 #include <QFormLayout>
 #include <QColorDialog>
 #include <QDialogButtonBox>
+#include "../core/ProjectModel.h"  // Para MinutiaLabelPosition
 
 namespace FingerprintEnhancer {
 
@@ -32,6 +33,7 @@ struct MinutiaeDisplaySettings {
     int labelFontSize = 10;           // Tamanho da fonte dos rótulos
     QColor labelBackgroundColor = QColor(255, 255, 255, 200);  // Cor de fundo dos rótulos (com alpha)
     int labelBackgroundOpacity = 200; // Opacidade (0-255)
+    FingerprintEnhancer::MinutiaLabelPosition defaultLabelPosition = FingerprintEnhancer::MinutiaLabelPosition::RIGHT;  // Posição padrão dos rótulos
 
     // Método para obter nome do símbolo
     QString getSymbolName() const {
@@ -61,6 +63,7 @@ private slots:
     void onSymbolChanged(int index);
     void onMarkerSizeChanged(int value);
     void onLabelFontSizeChanged(int value);
+    void onLabelPositionChanged(int index);
     void onChooseBackgroundColor();
     void onOpacityChanged(int value);
     void onAccepted();
@@ -78,6 +81,7 @@ private:
     QComboBox* symbolCombo;
     QSpinBox* markerSizeSpinBox;
     QSpinBox* labelFontSizeSpinBox;
+    QComboBox* labelPositionCombo;
     QPushButton* colorButton;
     QSlider* opacitySlider;
     QLabel* opacityLabel;

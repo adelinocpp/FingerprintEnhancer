@@ -33,6 +33,7 @@ public:
     float getAngle() const;
     float getQuality() const;
     QString getNotes() const;
+    MinutiaLabelPosition getLabelPosition() const;
 
 private slots:
     void onAccept();
@@ -48,6 +49,7 @@ private:
     QDoubleSpinBox* angleSpinBox;
     QDoubleSpinBox* qualitySpinBox;
     QTextEdit* notesTextEdit;
+    QComboBox* labelPositionComboBox;
 
     QLabel* infoLabel;
 

@@ -57,6 +57,16 @@ void MinutiaeDisplayDialog::setupUI() {
     labelFontSizeSpinBox->setSuffix(" pt");
     sizeLayout->addRow("Tamanho da Fonte:", labelFontSizeSpinBox);
 
+    labelPositionCombo = new QComboBox();
+    labelPositionCombo->addItem("À Direita (Padrão)", static_cast<int>(FingerprintEnhancer::MinutiaLabelPosition::RIGHT));
+    labelPositionCombo->addItem("À Esquerda", static_cast<int>(FingerprintEnhancer::MinutiaLabelPosition::LEFT));
+    labelPositionCombo->addItem("Acima", static_cast<int>(FingerprintEnhancer::MinutiaLabelPosition::ABOVE));
+    labelPositionCombo->addItem("Abaixo", static_cast<int>(FingerprintEnhancer::MinutiaLabelPosition::BELOW));
+    labelPositionCombo->addItem("Oculto", static_cast<int>(FingerprintEnhancer::MinutiaLabelPosition::HIDDEN));
+    int labelPosIndex = labelPositionCombo->findData(static_cast<int>(settings.defaultLabelPosition));
+    if (labelPosIndex >= 0) labelPositionCombo->setCurrentIndex(labelPosIndex);
+    sizeLayout->addRow("Posição do Rótulo:", labelPositionCombo);
+
     mainLayout->addWidget(sizeGroup);
 
     // Grupo: Aparência dos Rótulos
@@ -88,7 +98,8 @@ void MinutiaeDisplayDialog::setupUI() {
     QGroupBox* previewGroup = new QGroupBox("Visualização");
     QVBoxLayout* previewLayout = new QVBoxLayout(previewGroup);
     previewLabel = new QLabel();
-    previewLabel->setMinimumHeight(120);
+    previewLabel->setMinimumHeight(200);
+    previewLabel->setMinimumWidth(470);
     previewLabel->setAlignment(Qt::AlignCenter);
     previewLayout->addWidget(previewLabel);
     mainLayout->addWidget(previewGroup);
@@ -101,6 +112,7 @@ void MinutiaeDisplayDialog::setupUI() {
     connect(symbolCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MinutiaeDisplayDialog::onSymbolChanged);
     connect(markerSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onMarkerSizeChanged);
     connect(labelFontSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onLabelFontSizeChanged);
+    connect(labelPositionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MinutiaeDisplayDialog::onLabelPositionChanged);
     connect(colorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseBackgroundColor);
     connect(opacitySlider, &QSlider::valueChanged, this, &MinutiaeDisplayDialog::onOpacityChanged);
     connect(buttonBox, &QDialogButtonBox::accepted, this, &MinutiaeDisplayDialog::onAccepted);
@@ -122,6 +134,11 @@ void MinutiaeDisplayDialog::onMarkerSizeChanged(int value) {
 
 void MinutiaeDisplayDialog::onLabelFontSizeChanged(int value) {
     settings.labelFontSize = value;
+    updatePreview();
+}
+
+void MinutiaeDisplayDialog::onLabelPositionChanged(int index) {
+    settings.defaultLabelPosition = static_cast<FingerprintEnhancer::MinutiaLabelPosition>(labelPositionCombo->itemData(index).toInt());
     updatePreview();
 }
 
@@ -163,15 +180,15 @@ void MinutiaeDisplayDialog::updateColorButton() {
 }
 
 void MinutiaeDisplayDialog::updatePreview() {
-    // Criar pixmap para preview
-    QPixmap pixmap(400, 100);
+    // Criar pixmap para preview (maior para acomodar rótulos em todas as posições)
+    QPixmap pixmap(450, 180);
     pixmap.fill(QColor(240, 240, 240));
 
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    // Desenhar exemplo de minúcia
-    QPoint center(80, 50);
+    // Desenhar exemplo de minúcia (centralizado verticalmente para dar espaço)
+    QPoint center(100, 90);
     int size = settings.markerSize;
     double angle = 45.0; // Ângulo de exemplo
 
@@ -241,39 +258,75 @@ void MinutiaeDisplayDialog::updatePreview() {
         }
     }
 
-    // Desenhar rótulos de exemplo
-    QFont font;
-    font.setPointSize(settings.labelFontSize);
-    painter.setFont(font);
+    // Desenhar rótulos de exemplo baseado na posição selecionada
+    if (settings.defaultLabelPosition != FingerprintEnhancer::MinutiaLabelPosition::HIDDEN) {
+        QFont font;
+        font.setPointSize(settings.labelFontSize);
+        painter.setFont(font);
 
-    // Rótulo de índice
-    QString indexText = " 1 ";
-    QRect indexRect = painter.fontMetrics().boundingRect(indexText);
-    indexRect.moveCenter(QPoint(center.x(), center.y() - size/2 - 15));
-    indexRect.adjust(-2, -2, 2, 2);
+        QString numberText = " 1 .";
+        QString typeText = " BE .";
+        QRect numberRect = painter.fontMetrics().boundingRect(numberText);
+        QRect typeRect = painter.fontMetrics().boundingRect(typeText);
+        
+        int margin = 5;
+        QPoint numberPos, typePos;
+        
+        // Calcular posições baseado em defaultLabelPosition
+        switch (settings.defaultLabelPosition) {
+            case FingerprintEnhancer::MinutiaLabelPosition::RIGHT: // À direita (padrão)
+                numberPos = QPoint(center.x() + size/2 + margin, center.y() - size/2);
+                typePos = QPoint(center.x() + size/2 + margin, center.y() + 5);
+                break;
+                
+            case FingerprintEnhancer::MinutiaLabelPosition::LEFT: // À esquerda
+                numberPos = QPoint(center.x() - size/2 - margin - numberRect.width(), center.y() - size/2);
+                typePos = QPoint(center.x() - size/2 - margin - typeRect.width(), center.y() + 5);
+                break;
+                
+            case FingerprintEnhancer::MinutiaLabelPosition::ABOVE: // Acima
+                numberPos = QPoint(center.x() - numberRect.width()/2, center.y() - size/2 - margin - numberRect.height());
+                typePos = QPoint(center.x() - typeRect.width()/2, center.y() - size/2 - margin - numberRect.height() - typeRect.height() - 2);
+                break;
+                
+            case FingerprintEnhancer::MinutiaLabelPosition::BELOW: // Abaixo
+                numberPos = QPoint(center.x() - numberRect.width()/2, center.y() + size/2 + margin + numberRect.height());
+                typePos = QPoint(center.x() - typeRect.width()/2, center.y() + size/2 + margin + numberRect.height() + typeRect.height() + 2);
+                break;
+                
+            default:
+                numberPos = QPoint(center.x() + size/2 + margin, center.y() - size/2);
+                typePos = QPoint(center.x() + size/2 + margin, center.y() + 5);
+        }
 
-    painter.fillRect(indexRect, settings.labelBackgroundColor);
-    painter.setPen(Qt::black);
-    painter.drawText(indexRect, Qt::AlignCenter, indexText);
+        // Desenhar rótulo de número
+        painter.fillRect(numberRect.translated(numberPos), settings.labelBackgroundColor);
+        painter.setPen(Qt::black);
+        painter.drawText(numberPos, numberText);
 
-    // Rótulo de tipo
-    QString typeText = " Bifurcação ";
-    QRect typeRect = painter.fontMetrics().boundingRect(typeText);
-    typeRect.moveCenter(QPoint(center.x(), center.y() + size/2 + 15));
-    typeRect.adjust(-2, -2, 2, 2);
-
-    painter.fillRect(typeRect, settings.labelBackgroundColor);
-    painter.setPen(Qt::black);
-    painter.drawText(typeRect, Qt::AlignCenter, typeText);
+        // Desenhar rótulo de tipo
+        painter.fillRect(typeRect.translated(typePos), settings.labelBackgroundColor);
+        painter.drawText(typePos, typeText);
+    }
 
     // Adicionar texto descritivo
+    QString positionName;
+    switch (settings.defaultLabelPosition) {
+        case FingerprintEnhancer::MinutiaLabelPosition::RIGHT: positionName = "À Direita"; break;
+        case FingerprintEnhancer::MinutiaLabelPosition::LEFT: positionName = "À Esquerda"; break;
+        case FingerprintEnhancer::MinutiaLabelPosition::ABOVE: positionName = "Acima"; break;
+        case FingerprintEnhancer::MinutiaLabelPosition::BELOW: positionName = "Abaixo"; break;
+        case FingerprintEnhancer::MinutiaLabelPosition::HIDDEN: positionName = "Oculto"; break;
+    }
+    
     painter.setPen(Qt::darkGray);
-    painter.drawText(QRect(200, 10, 190, 80), Qt::AlignLeft | Qt::TextWordWrap,
-                     QString("Símbolo: %1\n\nTamanho: %2 px\nFonte: %3 pt\nOpacidade: %4%")
+    painter.drawText(QRect(220, 20, 220, 140), Qt::AlignLeft | Qt::TextWordWrap,
+                     QString("Símbolo: %1\n\nTamanho: %2 px\nFonte: %3 pt\nOpacidade: %4%\nPosição: %5")
                      .arg(settings.getSymbolName())
                      .arg(settings.markerSize)
                      .arg(settings.labelFontSize)
-                     .arg(int(settings.labelBackgroundOpacity * 100.0 / 255.0)));
+                     .arg(int(settings.labelBackgroundOpacity * 100.0 / 255.0))
+                     .arg(positionName));
 
     painter.end();
 

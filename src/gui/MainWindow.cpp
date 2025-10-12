@@ -1242,11 +1242,35 @@ void MainWindow::configureMinutiaeDisplay() {
 
     MinutiaeDisplayDialog dialog(minutiaeDisplaySettings, this);
     if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
+        auto oldSettings = minutiaeDisplaySettings;
         minutiaeDisplaySettings = dialog.getSettings();
 
         // Aplicar configurações aos overlays
         leftMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
         rightMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
+
+        // Se a posição padrão mudou, perguntar se quer aplicar a todas as minúcias
+        if (oldSettings.defaultLabelPosition != minutiaeDisplaySettings.defaultLabelPosition) {
+            QMessageBox::StandardButton reply = QMessageBox::question(this,
+                "Aplicar Posição do Rótulo",
+                "Deseja aplicar a nova posição padrão do rótulo a TODAS as minúcias do fragmento atual?",
+                QMessageBox::Yes | QMessageBox::No);
+            
+            if (reply == QMessageBox::Yes) {
+                // Aplicar a todas as minúcias do fragmento atual
+                using PM = FingerprintEnhancer::ProjectManager;
+                if (currentEntityType == ENTITY_FRAGMENT && !currentFragmentId.isEmpty()) {
+                    Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentFragmentId);
+                    if (frag) {
+                        for (auto& minutia : frag->minutiae) {
+                            minutia.labelPosition = minutiaeDisplaySettings.defaultLabelPosition;
+                        }
+                        qDebug() << "✅ Posição do rótulo aplicada a" << frag->minutiae.size() << "minúcias";
+                        statusLabel->setText(QString("Posição do rótulo aplicada a %1 minúcias").arg(frag->minutiae.size()));
+                    }
+                }
+            }
+        }
 
         // Atualizar visualização
         leftMinutiaeOverlay->update();

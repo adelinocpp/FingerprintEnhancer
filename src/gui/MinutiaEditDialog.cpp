@@ -57,6 +57,20 @@ void MinutiaEditDialog::setupUI() {
 
     mainLayout->addWidget(classificationGroup);
 
+    // Grupo de Aparência
+    QGroupBox* appearanceGroup = new QGroupBox("Aparência", this);
+    QFormLayout* appearanceLayout = new QFormLayout(appearanceGroup);
+    
+    labelPositionComboBox = new QComboBox(this);
+    labelPositionComboBox->addItem("À Direita (Padrão)", static_cast<int>(MinutiaLabelPosition::RIGHT));
+    labelPositionComboBox->addItem("À Esquerda", static_cast<int>(MinutiaLabelPosition::LEFT));
+    labelPositionComboBox->addItem("Acima", static_cast<int>(MinutiaLabelPosition::ABOVE));
+    labelPositionComboBox->addItem("Abaixo", static_cast<int>(MinutiaLabelPosition::BELOW));
+    labelPositionComboBox->addItem("Oculto", static_cast<int>(MinutiaLabelPosition::HIDDEN));
+    appearanceLayout->addRow("Posição do Rótulo:", labelPositionComboBox);
+    
+    mainLayout->addWidget(appearanceGroup);
+    
     // Observações
     QGroupBox* notesGroup = new QGroupBox("Observações", this);
     QVBoxLayout* notesLayout = new QVBoxLayout(notesGroup);
@@ -164,6 +178,15 @@ void MinutiaEditDialog::loadMinutiaData() {
             break;
         }
     }
+    
+    // Selecionar posição do rótulo
+    int labelPosValue = static_cast<int>(currentMinutia->labelPosition);
+    for (int i = 0; i < labelPositionComboBox->count(); ++i) {
+        if (labelPositionComboBox->itemData(i).toInt() == labelPosValue) {
+            labelPositionComboBox->setCurrentIndex(i);
+            break;
+        }
+    }
 }
 
 void MinutiaEditDialog::onAccept() {
@@ -173,6 +196,7 @@ void MinutiaEditDialog::onAccept() {
         currentMinutia->angle = getAngle();
         currentMinutia->quality = getQuality();
         currentMinutia->notes = getNotes();
+        currentMinutia->labelPosition = getLabelPosition();
         currentMinutia->modifiedAt = QDateTime::currentDateTime();
     }
     accept();
@@ -202,6 +226,11 @@ float MinutiaEditDialog::getQuality() const {
 
 QString MinutiaEditDialog::getNotes() const {
     return notesTextEdit->toPlainText();
+}
+
+MinutiaLabelPosition MinutiaEditDialog::getLabelPosition() const {
+    int posValue = labelPositionComboBox->currentData().toInt();
+    return static_cast<MinutiaLabelPosition>(posValue);
 }
 
 } // namespace FingerprintEnhancer
