@@ -45,9 +45,10 @@ MainWindow::MainWindow(QWidget *parent)
     , currentEntityType(ENTITY_NONE)
     , leftPanelEntityType(ENTITY_NONE)
     , rightPanelEntityType(ENTITY_NONE)
-    , currentToolMode(TOOL_NONE)
+    , currentToolMode(MODE_NONE)
     , sideBySideMode(true)
     , updateTimer(new QTimer(this))
+    , currentProgramState(STATE_NONE)
     , processingThread(nullptr)
     , processingWorker(nullptr)
     , isProcessing(false)
@@ -190,24 +191,15 @@ void MainWindow::createMenus() {
     QMenu *minutiaeMenu = toolsMenu->addMenu("&Minúcias");
     minutiaeMenu->addAction("&Adicionar Minúcia Manual", this, &MainWindow::activateAddMinutia, QKeySequence("Ctrl+M"));
     
-    // Modo de edição interativa
+    // Modo de edição interativa - UNIFICADO com sistema de estados
     QAction* editModeAction = minutiaeMenu->addAction("🎯 Modo de Edição &Interativa", this, [this](bool checked) {
-        if (leftMinutiaeOverlay) {
-            leftMinutiaeOverlay->setEditMode(checked);
-        }
-        if (rightMinutiaeOverlay) {
-            rightMinutiaeOverlay->setEditMode(checked);
-        }
-        if (checked) {
-            statusLabel->setText("Modo de edição interativa ATIVADO - Clique em uma minúcia para editar");
-        } else {
-            statusLabel->setText("Modo de edição interativa DESATIVADO");
-        }
+        qDebug() << "🎯 Menu: Modo de Edição Interativa -" << (checked ? "ATIVADO" : "DESATIVADO");
+        enableMinutiaEditingMode(checked);
     });
     editModeAction->setCheckable(true);
     editModeAction->setChecked(false);
     editModeAction->setShortcut(QKeySequence("Ctrl+I"));
-    editModeAction->setToolTip("Ativar modo de edição interativa: clique para selecionar, arraste para mover/rotacionar");
+    editModeAction->setToolTip("Ativar modo de edição interativa: selecione minúcia primeiro, depois arraste para mover/rotacionar");
     
     minutiaeMenu->addSeparator();
     minutiaeMenu->addAction("&Editar Minúcia", this, &MainWindow::activateEditMinutia);
@@ -262,23 +254,23 @@ void MainWindow::createToolBars() {
     QAction *noneToolAction = toolsToolBar->addAction("🖱️ Nenhuma");
     noneToolAction->setCheckable(true);
     noneToolAction->setChecked(true);
-    connect(noneToolAction, &QAction::triggered, [this]() { setToolMode(TOOL_NONE); });
+    connect(noneToolAction, &QAction::triggered, [this]() { setToolMode(MODE_NONE); });
 
     QAction *cropToolAction = toolsToolBar->addAction("✂️ Recortar");
     cropToolAction->setCheckable(true);
-    connect(cropToolAction, &QAction::triggered, [this]() { setToolMode(TOOL_CROP); });
+    connect(cropToolAction, &QAction::triggered, [this]() { setToolMode(MODE_CROP); });
 
     QAction *addMinutiaAction = toolsToolBar->addAction("➕ Adicionar Minúcia");
     addMinutiaAction->setCheckable(true);
-    connect(addMinutiaAction, &QAction::triggered, [this]() { setToolMode(TOOL_ADD_MINUTIA); });
+    connect(addMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_ADD_MINUTIA); });
 
     QAction *editMinutiaAction = toolsToolBar->addAction("✏️ Editar Minúcia");
     editMinutiaAction->setCheckable(true);
-    connect(editMinutiaAction, &QAction::triggered, [this]() { setToolMode(TOOL_EDIT_MINUTIA); });
+    connect(editMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_EDIT_MINUTIA); });
 
     QAction *removeMinutiaAction = toolsToolBar->addAction("🗑️ Remover Minúcia");
     removeMinutiaAction->setCheckable(true);
-    connect(removeMinutiaAction, &QAction::triggered, [this]() { setToolMode(TOOL_REMOVE_MINUTIA); });
+    connect(removeMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_REMOVE_MINUTIA); });
 
     // Agrupar ações para exclusividade mútua
     QActionGroup *toolGroup = new QActionGroup(this);
@@ -1446,7 +1438,7 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
 
         // Menu baseado no modo de ferramenta ativa
         switch (currentToolMode) {
-            case TOOL_NONE:
+            case MODE_NONE:
                 // Menu genérico baseado na entidade corrente
                 if (currentEntityType == ENTITY_IMAGE) {
                     menu.addAction("📐 Destacar Imagem Inteira como Fragmento",
@@ -1456,13 +1448,13 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                         addMinutiaQuickly(imagePos);
                     });
                     menu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
-                        setToolMode(TOOL_ADD_MINUTIA);
+                        setToolMode(MODE_ADD_MINUTIA);
                         addMinutiaAtPosition(imagePos);
                     });
                 }
                 break;
 
-            case TOOL_CROP:
+            case MODE_CROP:
                 if (viewer->hasCropSelection()) {
                     menu.addAction("✓ Aplicar Recorte", this, &MainWindow::applyCrop);
                     menu.addAction("Ajustar Seleção", this, &MainWindow::onCropAdjust);
@@ -1474,7 +1466,7 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                 }
                 break;
 
-            case TOOL_ADD_MINUTIA:
+            case MODE_ADD_MINUTIA:
                 if (currentEntityType == ENTITY_FRAGMENT) {
                     menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
                         addMinutiaQuickly(imagePos);
@@ -1485,7 +1477,7 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                 }
                 break;
 
-            case TOOL_EDIT_MINUTIA:
+            case MODE_EDIT_MINUTIA:
                 menu.addAction("Clique em uma minúcia para editar");
                 menu.addSeparator();
                 menu.addAction("Adicionar Nova Minúcia", [this, imagePos]() {
@@ -1495,11 +1487,11 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                 });
                 break;
 
-            case TOOL_REMOVE_MINUTIA:
+            case MODE_REMOVE_MINUTIA:
                 menu.addAction("Clique em uma minúcia para remover");
                 break;
 
-            case TOOL_PAN:
+            case MODE_PAN:
                 menu.addAction("Modo Pan ativo");
                 break;
         }
@@ -1779,7 +1771,7 @@ void MainWindow::applyCrop() {
     // Desativar modo de recorte
     activeViewer->clearCropSelection();
     activeViewer->setCropMode(false);
-    setToolMode(TOOL_NONE);
+    setToolMode(MODE_NONE);
 
     // Atualizar visualização no gerenciador ANTES de selecionar
     fragmentManager->updateView();
@@ -2169,7 +2161,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
 
     // Menu baseado no modo de ferramenta ativa
     switch (currentToolMode) {
-        case TOOL_NONE:
+        case MODE_NONE:
             // Menu genérico baseado na entidade corrente
             if (currentEntityType == ENTITY_IMAGE) {
                 contextMenu.addAction("📐 Destacar Imagem Inteira como Fragmento",
@@ -2179,7 +2171,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
                     addMinutiaQuickly(imagePos);
                 });
                 contextMenu.addAction("➕ Adicionar Minúcia Aqui (com diálogo)", [this, imagePos]() {
-                    setToolMode(TOOL_ADD_MINUTIA);
+                    setToolMode(MODE_ADD_MINUTIA);
                     addMinutiaAtPosition(imagePos);
                 });
             } else {
@@ -2187,7 +2179,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             }
             break;
 
-        case TOOL_CROP:
+        case MODE_CROP:
             if (processedImageViewer->hasCropSelection()) {
                 contextMenu.addAction("✓ Aplicar Recorte", this, &MainWindow::applyCrop);
                 contextMenu.addAction("Ajustar Seleção", this, &MainWindow::onCropAdjust);
@@ -2199,7 +2191,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             }
             break;
 
-        case TOOL_ADD_MINUTIA:
+        case MODE_ADD_MINUTIA:
             if (currentEntityType == ENTITY_FRAGMENT) {
                 contextMenu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
                     addMinutiaQuickly(imagePos);
@@ -2212,7 +2204,7 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             }
             break;
 
-        case TOOL_EDIT_MINUTIA:
+        case MODE_EDIT_MINUTIA:
             contextMenu.addAction("Clique em uma minúcia para editar");
             contextMenu.addSeparator();
             contextMenu.addAction("Adicionar Nova Minúcia", [this, imagePos]() {
@@ -2222,11 +2214,11 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             });
             break;
 
-        case TOOL_REMOVE_MINUTIA:
+        case MODE_REMOVE_MINUTIA:
             contextMenu.addAction("Clique em uma minúcia para remover");
             break;
 
-        case TOOL_PAN:
+        case MODE_PAN:
             contextMenu.addAction("Modo Pan ativo");
             break;
     }
@@ -2373,7 +2365,7 @@ void MainWindow::activateAddMinutia() {
     }
 
     // Ativar modo de adição de minúcias
-    setToolMode(TOOL_ADD_MINUTIA);
+    setToolMode(MODE_ADD_MINUTIA);
     statusLabel->setText("✚ Modo: Adicionar Minúcia ATIVO. Clique com BOTÃO DIREITO na posição desejada e escolha 'Adicionar Minúcia Aqui'.");
 }
 
@@ -2708,31 +2700,31 @@ void MainWindow::setToolMode(ToolMode mode) {
 
     // Ativar o modo selecionado apenas no painel ativo
     switch (mode) {
-        case TOOL_NONE:
+        case MODE_NONE:
             statusLabel->setText("Ferramenta: Nenhuma (navegação)");
             break;
 
-        case TOOL_CROP:
+        case MODE_CROP:
             activeViewer->setCropMode(true);
             statusLabel->setText("Ferramenta: Recortar - Clique e arraste para selecionar área");
             break;
 
-        case TOOL_ADD_MINUTIA:
+        case MODE_ADD_MINUTIA:
             activeOverlay->setEditMode(false);
             statusLabel->setText("Ferramenta: Adicionar Minúcia - Clique para marcar posição");
             break;
 
-        case TOOL_EDIT_MINUTIA:
+        case MODE_EDIT_MINUTIA:
             activeOverlay->setEditMode(true);
             statusLabel->setText("Ferramenta: Editar Minúcia - Clique para selecionar, arraste para mover");
             break;
 
-        case TOOL_REMOVE_MINUTIA:
+        case MODE_REMOVE_MINUTIA:
             activeOverlay->setEditMode(false);
             statusLabel->setText("Ferramenta: Remover Minúcia - Clique na minúcia para remover");
             break;
 
-        case TOOL_PAN:
+        case MODE_PAN:
             statusLabel->setText("Ferramenta: Pan - Arraste para mover a imagem");
             break;
     }
@@ -2900,6 +2892,15 @@ void MainWindow::setCurrentEntity(const QString& entityId, CurrentEntityType typ
 
     // Carregar entidade na visualização
     loadCurrentEntityToView();
+    
+    // Atualizar estado do programa baseado no tipo de entidade
+    if (type == ENTITY_IMAGE) {
+        setProgramState(STATE_IMAGE);
+    } else if (type == ENTITY_FRAGMENT) {
+        setProgramState(STATE_FRAGMENT);
+    } else {
+        setProgramState(STATE_NONE);
+    }
 
     // Atualizar status com informações detalhadas
     QString statusMsg;
@@ -3495,5 +3496,113 @@ void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
         }
     } catch (const cv::Exception& e) {
         QMessageBox::critical(this, "Erro", QString("Erro ao exportar fragmento: %1").arg(e.what()));
+    }
+}
+
+// ========== Gerenciamento de Estados do Programa ==========
+
+void MainWindow::setProgramState(ProgramState newState) {
+    qDebug() << "🔄 setProgramState:" << currentProgramState << "→" << newState;
+    
+    if (currentProgramState == newState) {
+        qDebug() << "  ℹ️  Estado já é" << newState << ", ignorando";
+        return;
+    }
+    
+    currentProgramState = newState;
+    updateUIForCurrentState();
+    
+    qDebug() << "  ✅ Estado mudou para:" << newState;
+}
+
+void MainWindow::updateUIForCurrentState() {
+    qDebug() << "🎨 updateUIForCurrentState - Estado:" << currentProgramState;
+    
+    ImageViewer* activeViewer = getActiveViewer();
+    FingerprintEnhancer::MinutiaeOverlay* activeOverlay = getActiveOverlay();
+    
+    switch (currentProgramState) {
+        case STATE_NONE:
+            qDebug() << "  📭 STATE_NONE - Nenhuma seleção";
+            // Overlay passa eventos (não captura)
+            if (activeOverlay) {
+                activeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+                activeOverlay->setEditMode(false);
+            }
+            // ImageViewer ativo normalmente
+            if (activeViewer) {
+                activeViewer->setEnabled(true);
+            }
+            statusLabel->setText("Pronto");
+            break;
+            
+        case STATE_IMAGE:
+            qDebug() << "  🖼️  STATE_IMAGE - Imagem selecionada";
+            // Overlay passa eventos
+            if (activeOverlay) {
+                activeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+                activeOverlay->setEditMode(false);
+            }
+            // ImageViewer: zoom, pan, crop, realces
+            if (activeViewer) {
+                activeViewer->setEnabled(true);
+            }
+            statusLabel->setText("Imagem selecionada - Operações: zoom, pan, crop, realces");
+            break;
+            
+        case STATE_FRAGMENT:
+            qDebug() << "  📄 STATE_FRAGMENT - Fragmento selecionado";
+            // Overlay passa eventos (permite zoom/pan)
+            if (activeOverlay) {
+                activeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+                activeOverlay->setEditMode(false);
+            }
+            // ImageViewer: tudo de imagem + adicionar minúcias
+            if (activeViewer) {
+                activeViewer->setEnabled(true);
+            }
+            statusLabel->setText("Fragmento selecionado - Adicione minúcias ou edite imagem");
+            break;
+            
+        case STATE_MINUTIA_EDITING:
+            qDebug() << "  ✏️  STATE_MINUTIA_EDITING - Editando minúcia";
+            // Overlay CAPTURA eventos (não passa para ImageViewer)
+            if (activeOverlay) {
+                activeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+                activeOverlay->setEditMode(true);
+            }
+            // ImageViewer: O overlay vai capturar eventos, então zoom/pan com mouse ficam desabilitados automaticamente
+            // (scroll bars continuam funcionando)
+            statusLabel->setText("🎯 MODO DE EDIÇÃO DE MINÚCIA ATIVO - Arraste para mover/rotacionar");
+            break;
+    }
+    
+    qDebug() << "  ✅ UI atualizada para estado:" << currentProgramState;
+}
+
+void MainWindow::enableMinutiaEditingMode(bool enable) {
+    qDebug() << "🎯 enableMinutiaEditingMode:" << enable;
+    
+    if (enable) {
+        // Só permite se há uma minúcia selecionada
+        FingerprintEnhancer::MinutiaeOverlay* overlay = getActiveOverlay();
+        if (overlay && !overlay->getSelectedMinutiaId().isEmpty()) {
+            setProgramState(STATE_MINUTIA_EDITING);
+            qDebug() << "  ✅ Modo de edição de minúcia ATIVADO";
+        } else {
+            qDebug() << "  ⚠️  Nenhuma minúcia selecionada, não pode ativar modo de edição";
+            QMessageBox::information(this, "Edição de Minúcia", 
+                "Selecione uma minúcia primeiro (clique na árvore ou duplo clique na imagem)");
+        }
+    } else {
+        // Volta para o estado anterior (fragmento ou imagem)
+        if (currentEntityType == ENTITY_FRAGMENT) {
+            setProgramState(STATE_FRAGMENT);
+        } else if (currentEntityType == ENTITY_IMAGE) {
+            setProgramState(STATE_IMAGE);
+        } else {
+            setProgramState(STATE_NONE);
+        }
+        qDebug() << "  ✅ Modo de edição de minúcia DESATIVADO";
     }
 }

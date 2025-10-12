@@ -32,7 +32,7 @@ public:
 
     void setFragment(Fragment* fragment);
     void setScaleFactor(double scale);
-    void setScrollOffset(const QPoint& offset);
+    void setScrollOffset(const QPoint& offset);  // Offset de scroll
     void setImageOffset(const QPoint& offset);  // Offset de centralização da imagem
     void clearMinutiae();
 

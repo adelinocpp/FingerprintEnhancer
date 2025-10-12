@@ -41,19 +41,26 @@
  * @brief Janela principal da aplicação FingerprintEnhancer
  * 
  * Interface principal que integra todas as funcionalidades de processamento
- * de imagem e análise de minúcias, seguindo o padrão do ImaQuest.
  */
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
+    // Estados do programa baseado no que está selecionado
+    enum ProgramState {
+        STATE_NONE,              // Nenhuma seleção
+        STATE_IMAGE,             // Imagem selecionada
+        STATE_FRAGMENT,          // Fragmento selecionado
+        STATE_MINUTIA_EDITING    // Minúcia em edição interativa
+    };
+    
     enum ToolMode {
-        TOOL_NONE = 0,
-        TOOL_CROP,
-        TOOL_ADD_MINUTIA,
-        TOOL_EDIT_MINUTIA,
-        TOOL_REMOVE_MINUTIA,
-        TOOL_PAN
+        MODE_NONE,
+        MODE_CROP,
+        MODE_ADD_MINUTIA,
+        MODE_EDIT_MINUTIA,
+        MODE_REMOVE_MINUTIA,
+        MODE_PAN
     };
 
     enum CurrentEntityType {
@@ -236,6 +243,12 @@ private slots:
     void onResetWorkingRequested(const QString& entityId, bool isFragment);
     void onDeleteFragmentRequested(const QString& fragmentId);
     void onDeleteMinutiaRequested(const QString& minutiaId);
+    
+    // Gerenciamento de estados do programa
+    void setProgramState(ProgramState newState);
+    ProgramState getProgramState() const { return currentProgramState; }
+    void updateUIForCurrentState();
+    void enableMinutiaEditingMode(bool enable);
 
 private:
     // Componentes principais (sem ProjectManager - usar singleton)
@@ -352,6 +365,7 @@ private:
     bool sideBySideMode;
     QString currentProjectPath;
     QTimer *updateTimer;
+    ProgramState currentProgramState;
 
     // Threading
     QThread *processingThread;
