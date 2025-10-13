@@ -1,0 +1,14 @@
+==========================================
+TESTE: Message handler instalado!
+==========================================
+[INFO] 🧪 TESTE: qInfo() funcionando!
+[INFO] Starting FingerprintEnhancer v "1.0.0"
+[INFO] Built with Qt 6.2.4 and OpenCV 4.5.4
+[INFO] OpenCV version: 4.5.4
+[INFO] Qt version: 6.2.4
+Initialized 12 translations for English
+Language set to: pt_BR
+[INFO] Translation system initialized with language: pt_BR
+[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!
+[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!
+[INFO] Application started successfully

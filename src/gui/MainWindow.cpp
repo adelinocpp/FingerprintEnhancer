@@ -1,9 +1,16 @@
 #include "MainWindow.h"
+#include "core/ProjectManager.h"
+
+// Definir categoria de logging
+Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
+
 #include "ProcessingWorker.h"
 #include "RotationDialog.h"
 #include "MinutiaEditDialog.h"
 #include "FFTFilterDialog.h"
 #include "ColorConversionDialog.h"
+#include "ScaleConfigDialog.h"
+#include "FragmentExportDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -13,6 +20,7 @@
 #include <QtWidgets/QDialog>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QFormLayout>
+#include <QtWidgets/QGridLayout>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QScrollBar>
 #include <QtGui/QActionGroup>
@@ -39,6 +47,12 @@ MainWindow::MainWindow(QWidget *parent)
     , cropTool(nullptr)
     , minutiaeMarker(nullptr)
     , afisMatcher(nullptr)
+    , scaleCalibrationTool(nullptr)
+    , leftTopRuler(nullptr)
+    , leftLeftRuler(nullptr)
+    , rightTopRuler(nullptr)
+    , rightLeftRuler(nullptr)
+    , rulersVisible(false)
     , imageState(new ImageState())
     , fragmentManager(nullptr)
     , minutiaeOverlay(nullptr)
@@ -53,6 +67,10 @@ MainWindow::MainWindow(QWidget *parent)
     , processingWorker(nullptr)
     , isProcessing(false)
 {
+    qCDebug(mainwindow) << "========================================";
+    qCDebug(mainwindow) << "🏗️ MainWindow::MainWindow() - Construtor iniciado";
+    qCDebug(mainwindow) << "========================================";
+    
     setupUI();
     connectSignals();
     updateWindowTitle();
@@ -99,7 +117,7 @@ void MainWindow::createMenus() {
     fileMenu->addAction("&Editar Informações do Projeto...", this, &MainWindow::editProjectInfo, QKeySequence("Ctrl+Shift+E"));
     fileMenu->addAction("&Limpar Projeto", this, &MainWindow::clearProject, QKeySequence("Ctrl+Shift+N"));
     fileMenu->addSeparator();
-    fileMenu->addAction("Abrir &Imagem...", this, &MainWindow::openImage, QKeySequence("Ctrl+I"));
+    fileMenu->addAction("Abrir &Imagem...", this, &MainWindow::openImage, QKeySequence("Ctrl+O"));
     fileMenu->addAction("Salvar I&magem...", this, &MainWindow::saveImage, QKeySequence("Ctrl+M"));
     fileMenu->addSeparator();
     fileMenu->addAction("Exportar &Relatório...", this, &MainWindow::exportReport, QKeySequence("Ctrl+R"));
@@ -171,9 +189,14 @@ void MainWindow::createMenus() {
 
     // Submenu de Calibração de Escala
     QMenu *scaleMenu = toolsMenu->addMenu("&Calibração de Escala");
-    scaleMenu->addAction("&Calibrar Escala...", this, &MainWindow::calibrateScale);
+    scaleMenu->addAction("📏 &Calibrar Escala Interativa...", this, &MainWindow::calibrateScale, QKeySequence("Ctrl+K"));
+    scaleMenu->addAction("⚙️ &Configurar Parâmetros de Escala...", this, &MainWindow::showScaleConfig);
     scaleMenu->addAction("&Definir Escala Manualmente...", this, &MainWindow::setScaleManually);
     scaleMenu->addAction("&Informações de Escala", this, &MainWindow::showScaleInfo);
+    scaleMenu->addSeparator();
+    QAction *toggleRulersAction = scaleMenu->addAction("Mostrar/Ocultar &Réguas", this, &MainWindow::toggleRulers, QKeySequence("Ctrl+Shift+R"));
+    toggleRulersAction->setCheckable(true);
+    toggleRulersAction->setChecked(false);
 
     // Submenu de Conversão de Espaço de Cor
     QMenu *colorMenu = toolsMenu->addMenu("Espaço de &Cor");
@@ -192,9 +215,9 @@ void MainWindow::createMenus() {
     minutiaeMenu->addAction("&Adicionar Minúcia Manual", this, &MainWindow::activateAddMinutia, QKeySequence("Ctrl+M"));
     
     // Modo de edição interativa - UNIFICADO com sistema de estados
-    QAction* editModeAction = minutiaeMenu->addAction("🎯 Modo de Edição &Interativa", this, [this](bool checked) {
+    editModeAction = minutiaeMenu->addAction("🎯 Modo de Edição &Interativa", this, [this](bool checked) {
         qDebug() << "🎯 Menu: Modo de Edição Interativa -" << (checked ? "ATIVADO" : "DESATIVADO");
-        enableMinutiaEditingMode(checked);
+        toggleInteractiveEditMode(checked);
     });
     editModeAction->setCheckable(true);
     editModeAction->setChecked(false);
@@ -204,10 +227,6 @@ void MainWindow::createMenus() {
     minutiaeMenu->addSeparator();
     minutiaeMenu->addAction("&Editar Minúcia", this, &MainWindow::activateEditMinutia);
     minutiaeMenu->addAction("&Remover Minúcia", this, &MainWindow::activateRemoveMinutia);
-    minutiaeMenu->addSeparator();
-    minutiaeMenu->addAction("&Mostrar Números", this, &MainWindow::toggleShowMinutiaeNumbers)->setCheckable(true);
-    minutiaeMenu->addAction("Mostrar Â&ngulos", this, &MainWindow::toggleShowMinutiaeAngles)->setCheckable(true);
-    minutiaeMenu->addAction("Mostrar &Tipos", this, &MainWindow::toggleShowMinutiaeLabels)->setCheckable(true);
     minutiaeMenu->addSeparator();
     minutiaeMenu->addAction("&Salvar Imagem com Minúcias Numeradas...", this, &MainWindow::saveMinutiaeNumberedImage);
     minutiaeMenu->addAction("&Limpar Todas as Minúcias", this, &MainWindow::clearAllMinutiae);
@@ -264,21 +283,32 @@ void MainWindow::createToolBars() {
     addMinutiaAction->setCheckable(true);
     connect(addMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_ADD_MINUTIA); });
 
-    QAction *editMinutiaAction = toolsToolBar->addAction("✏️ Editar Minúcia");
-    editMinutiaAction->setCheckable(true);
-    connect(editMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_EDIT_MINUTIA); });
+    editMinutiaToolbarAction = toolsToolBar->addAction("✏️ Editar Minúcia");
+    editMinutiaToolbarAction->setCheckable(true);
+    connect(editMinutiaToolbarAction, &QAction::triggered, [this](bool checked) {
+        qDebug() << "🎯 Toolbar: Modo de Edição Interativa -" << (checked ? "ATIVADO" : "DESATIVADO");
+        toggleInteractiveEditMode(checked);
+    });
 
     QAction *removeMinutiaAction = toolsToolBar->addAction("🗑️ Remover Minúcia");
     removeMinutiaAction->setCheckable(true);
     connect(removeMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_REMOVE_MINUTIA); });
+
+    toolsToolBar->addSeparator();
+    
+    QAction *calibrateScaleAction = toolsToolBar->addAction("📏 Calibrar Escala");
+    calibrateScaleAction->setCheckable(true);
+    calibrateScaleAction->setToolTip("Calibrar escala baseada em distância entre cristas (Ctrl+K)");
+    connect(calibrateScaleAction, &QAction::triggered, [this]() { setToolMode(MODE_CALIBRATE_SCALE); });
 
     // Agrupar ações para exclusividade mútua
     QActionGroup *toolGroup = new QActionGroup(this);
     toolGroup->addAction(noneToolAction);
     toolGroup->addAction(cropToolAction);
     toolGroup->addAction(addMinutiaAction);
-    toolGroup->addAction(editMinutiaAction);
+    toolGroup->addAction(editMinutiaToolbarAction);
     toolGroup->addAction(removeMinutiaAction);
+    toolGroup->addAction(calibrateScaleAction);
 }
 
 void MainWindow::createStatusBar() {
@@ -296,16 +326,73 @@ void MainWindow::createStatusBar() {
 
 QWidget* MainWindow::createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay) {
     QWidget *container = new QWidget();
-    QStackedLayout *stackedLayout = new QStackedLayout(container);
+    QGridLayout *gridLayout = new QGridLayout(container);
+    gridLayout->setSpacing(0);
+    gridLayout->setContentsMargins(0, 0, 0, 0);
+    
+    // Determinar qual painel (esquerdo ou direito)
+    bool isLeftPanel = (viewer == processedImageViewer);
+    
+    // Criar réguas para este painel
+    RulerWidget *topRuler = new RulerWidget(RulerWidget::HORIZONTAL, RulerWidget::TOP, container);
+    RulerWidget *leftRuler = new RulerWidget(RulerWidget::VERTICAL, RulerWidget::LEFT, container);
+    
+    // Armazenar referências
+    if (isLeftPanel) {
+        leftTopRuler = topRuler;
+        leftLeftRuler = leftRuler;
+    } else {
+        rightTopRuler = topRuler;
+        rightLeftRuler = leftRuler;
+    }
+    
+    // Configurar réguas (ocultas por padrão)
+    topRuler->setVisible(false);
+    leftRuler->setVisible(false);
+    
+    // Criar widget central com viewer e overlay empilhados
+    QWidget *viewerWidget = new QWidget();
+    QStackedLayout *stackedLayout = new QStackedLayout(viewerWidget);
     stackedLayout->setStackingMode(QStackedLayout::StackAll);
-
+    stackedLayout->setContentsMargins(0, 0, 0, 0);
+    
     stackedLayout->addWidget(viewer);
     stackedLayout->addWidget(overlay);
-
+    
     // Configurar overlay para ser transparente e passar eventos de mouse
     overlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     overlay->setStyleSheet("background-color: transparent;");
-
+    
+    // Adicionar ao grid layout
+    // [0,0] = canto    [0,1] = régua topo
+    // [1,0] = régua esq [1,1] = viewer
+    QWidget *cornerWidget = new QWidget();
+    cornerWidget->setFixedSize(25, 25);
+    cornerWidget->setStyleSheet("background-color: #f0f0f0;");
+    
+    gridLayout->addWidget(cornerWidget, 0, 0);
+    gridLayout->addWidget(topRuler, 0, 1);
+    gridLayout->addWidget(leftRuler, 1, 0);
+    gridLayout->addWidget(viewerWidget, 1, 1);
+    
+    // Conectar sinais do viewer para atualizar réguas
+    connect(viewer, &ImageViewer::zoomChanged, this, [topRuler, leftRuler](double factor) {
+        topRuler->setZoomFactor(factor);
+        leftRuler->setZoomFactor(factor);
+    });
+    
+    connect(viewer, &ImageViewer::scrollChanged, this, [topRuler, leftRuler, viewer](QPoint offset) {
+        topRuler->setScrollOffset(offset.x());
+        leftRuler->setScrollOffset(offset.y());
+        topRuler->update();
+        leftRuler->update();
+    });
+    
+    connect(viewer, &ImageViewer::imageOffsetChanged, this, [topRuler, leftRuler](QPoint offset) {
+        topRuler->setImageOffset(offset.x());
+        leftRuler->setImageOffset(offset.y());
+    });
+    
     return container;
 }
 
@@ -559,12 +646,27 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onMinutiaPositionChanged);
     connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::angleChanged,
             this, &MainWindow::onMinutiaAngleChanged);
+    connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDeleteRequested,
+            this, &MainWindow::onDeleteMinutiaRequested);
+    connect(leftMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::exitEditModeRequested,
+            this, [this]() { 
+                qDebug() << "🔑 Saindo do modo de edição (ESC)";
+                toggleInteractiveEditMode(false); 
+            });
+    
     connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDoubleClicked,
             this, &MainWindow::onMinutiaDoubleClicked);
     connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::positionChanged,
             this, &MainWindow::onMinutiaPositionChanged);
     connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::angleChanged,
             this, &MainWindow::onMinutiaAngleChanged);
+    connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::minutiaDeleteRequested,
+            this, &MainWindow::onDeleteMinutiaRequested);
+    connect(rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::exitEditModeRequested,
+            this, [this]() { 
+                qDebug() << "🔑 Saindo do modo de edição (ESC)";
+                toggleInteractiveEditMode(false); 
+            });
 
     // Manter compatibilidade com overlay antigo
     minutiaeOverlay = leftMinutiaeOverlay;
@@ -1992,35 +2094,156 @@ void MainWindow::rotateCustomAngle() {
 // ==================== CALIBRAÇÃO DE ESCALA ====================
 
 void MainWindow::calibrateScale() {
+    // Perguntar espaçamento típico entre cristas antes de ativar
+    bool ok;
+    double ridgeSpacing = QInputDialog::getDouble(this, "Calibração de Escala",
+        "Distância típica entre cristas (mm):\n"
+        "(Valor padrão: 0.4545mm para impressões digitais)",
+        0.4545, 0.1, 5.0, 4, &ok);
+    
+    if (!ok) return;
+    
+    // Criar ferramenta se não existir
+    if (!scaleCalibrationTool) {
+        ImageViewer* activeViewer = getActiveViewer();
+        if (!activeViewer) {
+            QMessageBox::warning(this, "Calibração de Escala", "Visualizador não disponível");
+            return;
+        }
+        
+        scaleCalibrationTool = new ScaleCalibrationTool(activeViewer);
+        
+        // Conectar sinais
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::calibrationCompleted,
+                this, &MainWindow::onCalibrationCompleted);
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::calibrationCancelled,
+                this, &MainWindow::onCalibrationCancelled);
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::lineDrawn,
+                this, &MainWindow::onCalibrationLineDrawn);
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::ridgeCountChanged,
+                this, &MainWindow::onCalibrationRidgeCountChanged);
+    }
+    
+    scaleCalibrationTool->setDefaultRidgeSpacing(ridgeSpacing);
+    
+    // Ativar modo
+    setToolMode(MODE_CALIBRATE_SCALE);
+    
+    QMessageBox::information(this, "Calibração de Escala",
+        "Instruções:\n\n"
+        "1. Desenhe uma linha perpendicular através das cristas\n"
+        "2. Clique em cada crista ao longo da linha (mínimo 2)\n"
+        "3. Pressione ENTER para concluir\n"
+        "4. ESC para cancelar ou clique em outra ferramenta\n\n"
+        "Dica: Quanto mais cristas marcar, mais precisa será a calibração!");
+}
+
+void MainWindow::activateScaleCalibrationMode() {
     if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
-        QMessageBox::warning(this, "Calibração", "Nenhuma imagem ou fragmento selecionado");
+        QMessageBox::warning(this, "Calibração de Escala", 
+                            "Nenhuma imagem ou fragmento selecionado");
+        setToolMode(MODE_NONE);
         return;
     }
 
-    bool ok;
-    double distance = QInputDialog::getDouble(this, "Calibração de Escala",
-        "Insira a distância conhecida em milímetros\n"
-        "(você será solicitado a marcar esta distância na imagem):",
-        10.0, 0.1, 1000.0, 2, &ok);
+    ImageViewer* activeViewer = getActiveViewer();
+    if (!activeViewer) {
+        QMessageBox::warning(this, "Calibração de Escala", "Visualizador não disponível");
+        setToolMode(MODE_NONE);
+        return;
+    }
+    
+    // Criar ferramenta se não existir
+    if (!scaleCalibrationTool) {
+        scaleCalibrationTool = new ScaleCalibrationTool(activeViewer);
+        
+        // Conectar sinais
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::calibrationCompleted,
+                this, &MainWindow::onCalibrationCompleted);
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::calibrationCancelled,
+                this, &MainWindow::onCalibrationCancelled);
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::lineDrawn,
+                this, &MainWindow::onCalibrationLineDrawn);
+        connect(scaleCalibrationTool, &ScaleCalibrationTool::ridgeCountChanged,
+                this, &MainWindow::onCalibrationRidgeCountChanged);
+    }
+    
+    // Configurar ferramenta com parâmetros atuais
+    scaleCalibrationTool->setParent(activeViewer);
+    scaleCalibrationTool->setGeometry(activeViewer->rect());
+    scaleCalibrationTool->setZoomFactor(activeViewer->getZoomFactor());
+    
+    // Configurar scroll offset (x e y)
+    QPoint scrollOffset(activeViewer->horizontalScrollBar()->value(),
+                        activeViewer->verticalScrollBar()->value());
+    scaleCalibrationTool->setScrollOffset(scrollOffset);
+    
+    // Configurar image offset
+    scaleCalibrationTool->setImageOffset(activeViewer->getImageOffset());
+    
+    // Conectar sinais para atualização dinâmica durante calibração
+    // Zoom
+    connect(activeViewer, &ImageViewer::zoomChanged, scaleCalibrationTool, 
+            &ScaleCalibrationTool::setZoomFactor, Qt::UniqueConnection);
+    
+    // Scroll
+    connect(activeViewer, &ImageViewer::scrollChanged, scaleCalibrationTool,
+            &ScaleCalibrationTool::setScrollOffset, Qt::UniqueConnection);
+    
+    // Image offset
+    connect(activeViewer, &ImageViewer::imageOffsetChanged, scaleCalibrationTool,
+            &ScaleCalibrationTool::setImageOffset, Qt::UniqueConnection);
+    
+    // Ativar ferramenta
+    scaleCalibrationTool->activate();
+}
 
-    if (!ok) return;
+void MainWindow::deactivateScaleCalibrationMode() {
+    if (scaleCalibrationTool && scaleCalibrationTool->isActive()) {
+        scaleCalibrationTool->deactivate();
+    }
+}
 
-    QMessageBox::information(this, "Calibração",
-        "Clique em dois pontos na imagem para marcar a distância conhecida.\n"
-        "Use o modo de medição para fazer isso.");
-
-    // TODO: Implementar seleção interativa de dois pontos
-    // Por agora, usar input manual
-    double pixelDistance = QInputDialog::getDouble(this, "Calibração de Escala",
-        "Insira a distância em pixels medida na imagem:",
-        100.0, 1.0, 10000.0, 2, &ok);
-
-    if (!ok) return;
-
-    double scale = pixelDistance / distance; // pixels por mm
-    imageProcessor->setScale(scale);
-
-    statusLabel->setText(QString("Escala calibrada: %1 pixels/mm").arg(scale, 0, 'f', 2));
+void MainWindow::showScaleConfig() {
+    ScaleConfigDialog dialog(this);
+    
+    // Configurar valores atuais
+    double currentScale = imageProcessor->getScale();
+    if (currentScale > 0) {
+        dialog.setPixelsPerMm(currentScale);
+    }
+    
+    // Sempre definir espaçamento padrão
+    dialog.setRidgeSpacing(0.4545);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        // Se modificou pixels/mm ou DPI, aplicar à imagem
+        double newScale = dialog.getPixelsPerMm();
+        if (newScale > 0 && std::abs(newScale - currentScale) > 0.01) {
+            imageProcessor->setScale(newScale);
+            
+            // Atualizar réguas
+            if (leftTopRuler) leftTopRuler->setScale(newScale);
+            if (leftLeftRuler) leftLeftRuler->setScale(newScale);
+            if (rightTopRuler) rightTopRuler->setScale(newScale);
+            if (rightLeftRuler) rightLeftRuler->setScale(newScale);
+            
+            statusLabel->setText(QString("Escala configurada: %1 px/mm (%2 DPI)")
+                                .arg(newScale, 0, 'f', 2)
+                                .arg(dialog.getDPI(), 0, 'f', 0));
+            
+            QMessageBox::information(this, "Configuração de Escala",
+                QString("Escala atualizada:\n\n"
+                        "Pixels/mm: %1\n"
+                        "DPI: %2\n"
+                        "Distância entre cristas: %3 mm\n"
+                        "Cristas por 10mm: %4")
+                    .arg(newScale, 0, 'f', 2)
+                    .arg(dialog.getDPI(), 0, 'f', 0)
+                    .arg(dialog.getRidgeSpacing(), 0, 'f', 4)
+                    .arg(dialog.getRidgesPer10mm(), 0, 'f', 2));
+        }
+    }
 }
 
 void MainWindow::setScaleManually() {
@@ -2047,6 +2270,80 @@ void MainWindow::showScaleInfo() {
         QMessageBox::information(this, "Informação de Escala",
             "Nenhuma escala foi calibrada ainda.");
     }
+}
+
+void MainWindow::toggleRulers() {
+    rulersVisible = !rulersVisible;
+    
+    if (leftTopRuler) leftTopRuler->setVisible(rulersVisible);
+    if (leftLeftRuler) leftLeftRuler->setVisible(rulersVisible);
+    if (rightTopRuler) rightTopRuler->setVisible(rulersVisible);
+    if (rightLeftRuler) rightLeftRuler->setVisible(rulersVisible);
+    
+    statusLabel->setText(rulersVisible ? "Réguas exibidas" : "Réguas ocultas");
+}
+
+void MainWindow::onCalibrationCompleted(double scale, double confidence) {
+    if (scaleCalibrationTool) {
+        scaleCalibrationTool->deactivate();
+    }
+    
+    // Aplicar escala
+    imageProcessor->setScale(scale);
+    
+    // Atualizar réguas com nova escala
+    if (leftTopRuler) leftTopRuler->setScale(scale);
+    if (leftLeftRuler) leftLeftRuler->setScale(scale);
+    if (rightTopRuler) rightTopRuler->setScale(scale);
+    if (rightLeftRuler) rightLeftRuler->setScale(scale);
+    
+    // Mostrar resultado
+    double dpi = scale * 25.4;
+    QString message = QString(
+        "✓ Calibração concluída com sucesso!\n\n"
+        "Escala: %1 pixels/mm\n"
+        "Resolução: %2 DPI\n"
+        "Confiança: %3%\n\n"
+        "A escala foi aplicada e as réguas foram atualizadas.")
+        .arg(scale, 0, 'f', 2)
+        .arg(dpi, 0, 'f', 0)
+        .arg(confidence, 0, 'f', 0);
+    
+    QMessageBox::information(this, "Calibração Concluída", message);
+    
+    statusLabel->setText(QString("Escala calibrada: %1 px/mm (%2 DPI)")
+                        .arg(scale, 0, 'f', 2)
+                        .arg(dpi, 0, 'f', 0));
+    
+    // Sugerir exibir réguas se estiverem ocultas
+    if (!rulersVisible) {
+        QMessageBox::StandardButton reply = QMessageBox::question(this, 
+            "Exibir Réguas",
+            "Deseja exibir as réguas métricas nos painéis?",
+            QMessageBox::Yes | QMessageBox::No);
+        
+        if (reply == QMessageBox::Yes) {
+            toggleRulers();
+        }
+    }
+    
+    // Voltar ao modo normal
+    setToolMode(MODE_NONE);
+}
+
+void MainWindow::onCalibrationCancelled() {
+    statusLabel->setText("Calibração de escala cancelada");
+    setToolMode(MODE_NONE);
+}
+
+void MainWindow::onCalibrationLineDrawn(QPoint start, QPoint end, double distance) {
+    statusLabel->setText(QString("Linha desenhada: %1 pixels - Agora clique nas cristas")
+                        .arg(distance, 0, 'f', 1));
+}
+
+void MainWindow::onCalibrationRidgeCountChanged(int count) {
+    statusLabel->setText(QString("📏 Cristas marcadas: %1 (mínimo 2 requerido)")
+                        .arg(count));
 }
 
 // ==================== CONVERSÃO DE ESPAÇOS DE COR ====================
@@ -2396,6 +2693,7 @@ void MainWindow::activateAddMinutia() {
 void MainWindow::activateEditMinutia() {
     if (minutiaeMarker) {
         minutiaeMarker->setMode(MinutiaeMarkerWidget::Mode::EditMinutia);
+        
         statusLabel->setText("Modo: Editar Minúcia. Clique em uma minúcia existente.");
     }
 }
@@ -2717,6 +3015,11 @@ void MainWindow::setToolMode(ToolMode mode) {
     // Desativar edit mode em ambos os overlays
     leftMinutiaeOverlay->setEditMode(false);
     rightMinutiaeOverlay->setEditMode(false);
+    
+    // Desativar calibração se ativa
+    if (mode != MODE_CALIBRATE_SCALE) {
+        deactivateScaleCalibrationMode();
+    }
 
     // Obter viewer e overlay ativos
     ImageViewer* activeViewer = getActiveViewer();
@@ -2750,6 +3053,12 @@ void MainWindow::setToolMode(ToolMode mode) {
 
         case MODE_PAN:
             statusLabel->setText("Ferramenta: Pan - Arraste para mover a imagem");
+            break;
+            
+        case MODE_CALIBRATE_SCALE:
+            // Ativar ferramenta de calibração
+            activateScaleCalibrationMode();
+            statusLabel->setText("📏 Calibração de Escala - Desenhe linha através das cristas");
             break;
     }
 }
@@ -3486,40 +3795,39 @@ void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
         return;
     }
 
-    QString suggestedName = QString("fragmento_%1.png").arg(fragmentId.left(8));
-
-    QString fileName = QFileDialog::getSaveFileName(
-        this,
-        "Exportar Fragmento",
-        suggestedName,
-        "PNG (*.png);;JPEG (*.jpg *.jpeg);;TIFF (*.tif *.tiff);;BMP (*.bmp);;Todos (*.*)"
-    );
-
-    if (fileName.isEmpty()) {
-        return;
+    // Obter escala atual
+    double scale = imageProcessor->getScale();
+    if (scale <= 0) {
+        scale = 10.0;  // Escala padrão
     }
-
-    cv::Mat imageToSave = frag->workingImage;
     
-    if (imageToSave.empty()) {
-        QMessageBox::warning(this, "Erro", "Imagem do fragmento vazia");
-        return;
-    }
-
-    try {
-        if (cv::imwrite(fileName.toStdString(), imageToSave)) {
-            statusLabel->setText(QString("Fragmento exportado: %1").arg(QFileInfo(fileName).fileName()));
-            QMessageBox::information(this, "Sucesso", 
-                QString("Fragmento exportado com sucesso!\n\nArquivo: %1\nTamanho: %2×%3 pixels\nMinúcias: %4")
-                    .arg(fileName)
-                    .arg(imageToSave.cols)
-                    .arg(imageToSave.rows)
-                    .arg(frag->getMinutiaeCount()));
+    // Abrir diálogo avançado de exportação
+    FragmentExportDialog dialog(frag, scale, this);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        QString errorMessage;
+        if (dialog.exportImage(errorMessage)) {
+            QString fileName = dialog.getFilePath();
+            QFileInfo fileInfo(fileName);
+            
+            QString message = QString("Fragmento exportado com sucesso!\n\n"
+                                    "Arquivo: %1\n"
+                                    "Resolução: %2×%3 pixels\n"
+                                    "DPI: %4\n"
+                                    "Formato: %5\n"
+                                    "Minúcias: %6")
+                .arg(fileInfo.fileName())
+                .arg(dialog.getOutputWidth())
+                .arg(dialog.getOutputHeight())
+                .arg(dialog.getDPI())
+                .arg(dialog.getFormat())
+                .arg(dialog.includeMinutiae() ? QString::number(frag->getMinutiaeCount()) : "0 (sem marcações)");
+            
+            statusLabel->setText(QString("Fragmento exportado: %1").arg(fileInfo.fileName()));
+            QMessageBox::information(this, "Sucesso", message);
         } else {
-            QMessageBox::warning(this, "Erro", "Não foi possível salvar o fragmento");
+            QMessageBox::warning(this, "Erro", QString("Falha ao exportar:\n%1").arg(errorMessage));
         }
-    } catch (const cv::Exception& e) {
-        QMessageBox::critical(this, "Erro", QString("Erro ao exportar fragmento: %1").arg(e.what()));
     }
 }
 
@@ -3628,5 +3936,64 @@ void MainWindow::enableMinutiaEditingMode(bool enable) {
             setProgramState(STATE_NONE);
         }
         qDebug() << "  ✅ Modo de edição de minúcia DESATIVADO";
+    }
+}
+
+void MainWindow::toggleInteractiveEditMode(bool enable) {
+    fprintf(stderr, "[MAINWINDOW] 🎯 toggleInteractiveEditMode: %s\n", enable ? "true" : "false");
+    fflush(stderr);
+    
+    FingerprintEnhancer::MinutiaeOverlay* activeOverlay = getActiveOverlay();
+    if (!activeOverlay) {
+        fprintf(stderr, "[MAINWINDOW]   ⚠️  Nenhum overlay ativo\n");
+        fflush(stderr);
+        return;
+    }
+    
+    fprintf(stderr, "[MAINWINDOW]   📊 Estado do overlay antes:\n");
+    fprintf(stderr, "[MAINWINDOW]      - editMode atual: %s\n", activeOverlay->isEditMode() ? "true" : "false");
+    fprintf(stderr, "[MAINWINDOW]      - tem fragmento: %s\n", (activeOverlay->getFragment() != nullptr) ? "true" : "false");
+    fflush(stderr);
+    
+    if (enable) {
+        // Ativar modo de edição interativa no overlay
+        activeOverlay->setEditMode(true);
+        activeOverlay->setFocus();  // Dar foco ao overlay para receber eventos de teclado
+        statusLabel->setText("🎯 Modo de Edição Interativa ATIVO - Clique em minúcia e botão direito para opções");
+        
+        fprintf(stderr, "[MAINWINDOW]   ✅ Modo de edição interativa ATIVADO no overlay\n");
+        fprintf(stderr, "[MAINWINDOW]   📊 Estado do overlay depois:\n");
+        fprintf(stderr, "[MAINWINDOW]      - editMode agora: %s\n", activeOverlay->isEditMode() ? "true" : "false");
+        fprintf(stderr, "[MAINWINDOW]      - fragmento: %s\n", (activeOverlay->getFragment() != nullptr) ? "true" : "false");
+        fflush(stderr);
+        
+        // Sincronizar checkboxes
+        if (editModeAction && !editModeAction->isChecked()) {
+            editModeAction->blockSignals(true);
+            editModeAction->setChecked(true);
+            editModeAction->blockSignals(false);
+        }
+        if (editMinutiaToolbarAction && !editMinutiaToolbarAction->isChecked()) {
+            editMinutiaToolbarAction->blockSignals(true);
+            editMinutiaToolbarAction->setChecked(true);
+            editMinutiaToolbarAction->blockSignals(false);
+        }
+    } else {
+        // Desativar modo de edição
+        activeOverlay->setEditMode(false);
+        statusLabel->setText("Modo de edição interativa desativado");
+        qDebug() << "  ✅ Modo de edição interativa DESATIVADO";
+        
+        // Sincronizar checkboxes
+        if (editModeAction && editModeAction->isChecked()) {
+            editModeAction->blockSignals(true);
+            editModeAction->setChecked(false);
+            editModeAction->blockSignals(false);
+        }
+        if (editMinutiaToolbarAction && editMinutiaToolbarAction->isChecked()) {
+            editMinutiaToolbarAction->blockSignals(true);
+            editMinutiaToolbarAction->setChecked(false);
+            editMinutiaToolbarAction->blockSignals(false);
+        }
     }
 }

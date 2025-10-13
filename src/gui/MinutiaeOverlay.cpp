@@ -1,11 +1,14 @@
 #include "MinutiaeOverlay.h"
+#include "MinutiaEditDialog.h"
+#include "../core/ProjectManager.h"
 #include <QPainter>
 #include <QMouseEvent>
-#include <QContextMenuEvent>
 #include <QMenu>
-#include <QEvent>
-#include <QDebug>
+#include <QLoggingCategory>
 #include <cmath>
+
+// Categoria de logging para MinutiaeOverlay
+Q_LOGGING_CATEGORY(overlay, "overlay")
 
 namespace FingerprintEnhancer {
 
@@ -29,6 +32,11 @@ MinutiaeOverlay::MinutiaeOverlay(QWidget *parent)
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
     setAttribute(Qt::WA_OpaquePaintEvent, false);
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);  // Permite receber eventos de teclado
+    setContextMenuPolicy(Qt::DefaultContextMenu);  // CRÍTICO: Habilitar eventos de contexto!
+    
+    fprintf(stderr, "[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!\n");
+    fflush(stderr);
 }
 
 void MinutiaeOverlay::setFragment(Fragment* fragment) {
@@ -96,7 +104,8 @@ void MinutiaeOverlay::paintEvent(QPaintEvent *event) {
         }
 
         if (showLabels) {
-            drawMinutiaLabel(painter, scaledPos, number, minutia.getTypeAbbreviation(), isSelected, minutia.labelPosition);
+            QString typeAbbr = displaySettings.showLabelType ? minutia.getTypeAbbreviation() : "";
+            drawMinutiaLabel(painter, scaledPos, number, typeAbbr, isSelected, minutia.labelPosition);
         }
 
         number++;
@@ -208,7 +217,7 @@ void MinutiaeOverlay::drawMinutia(QPainter& painter, const Minutia& minutia, boo
     }
 
     // Desenhar ângulo adicional se habilitado (linha externa)
-    if (showAngles && displaySettings.symbol != MinutiaeSymbol::CIRCLE_ARROW) {
+    if (displaySettings.showAngles && displaySettings.symbol != MinutiaeSymbol::CIRCLE_ARROW) {
         int lineLength = size * 2;
         double radians = minutia.angle * M_PI / 180.0;
         int endX = pos.x() + static_cast<int>(lineLength * cos(radians));
@@ -233,12 +242,25 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
     int size = displaySettings.markerSize;
     int margin = 5;
 
+    // Verificar se o tipo será exibido
+    bool showType = (!type.isEmpty() && type != "NC.");
+    
     // Desenhar número com espaços
-    QString label = QString(" %1 .").arg(number);
+    QString label = QString("( %1 )").arg(number);
     QRect textRect = painter.fontMetrics().boundingRect(label);
+    
+    // Calcular altura do tipo se for exibido
+    int typeHeight = 0;
+    if (showType) {
+        QString typeLabel = QString(" %1 .").arg(type);
+        QRect typeRect = painter.fontMetrics().boundingRect(typeLabel);
+        typeHeight = typeRect.height() + 2; // +2 para espaçamento entre número e tipo
+    }
+    
     QPoint textPos;
     
     // Calcular posição baseado em labelPos
+    // Se não há tipo, ajustar para ficar mais próximo da marcação
     switch (labelPos) {
         case MinutiaLabelPosition::RIGHT:
             textPos = QPoint(pos.x() + size/2 + margin, pos.y() - size/2);
@@ -247,9 +269,11 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
             textPos = QPoint(pos.x() - size/2 - margin - textRect.width(), pos.y() - size/2);
             break;
         case MinutiaLabelPosition::ABOVE:
-            textPos = QPoint(pos.x() - textRect.width()/2, pos.y() - size/2 - margin - textRect.height());
+            // Se tem tipo, o número fica mais longe; se não tem, fica mais perto
+            textPos = QPoint(pos.x() - textRect.width()/2, pos.y() - size/2 - margin - textRect.height() - typeHeight);
             break;
         case MinutiaLabelPosition::BELOW:
+            // Se tem tipo, fica na posição normal; se não tem, mais perto
             textPos = QPoint(pos.x() - textRect.width()/2, pos.y() + size/2 + margin + textRect.height());
             break;
         default:
@@ -262,27 +286,31 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
     painter.drawText(textPos, label);
 
     // Desenhar tipo (abreviação) com espaços
-    if (!type.isEmpty() && type != "N/C") {
+    if (showType) {
         QString typeLabel = QString(" %1 .").arg(type);
         QRect typeRect = painter.fontMetrics().boundingRect(typeLabel);
         QPoint typePos;
         
-        // Tipo sempre abaixo do número
+        // Tipo sempre em relação ao número
         switch (labelPos) {
             case MinutiaLabelPosition::RIGHT:
-                typePos = QPoint(pos.x() + size/2 + margin, pos.y() + 5);
+                // Tipo abaixo do número, alinhado à esquerda
+                typePos = QPoint(textPos.x(), textPos.y() + textRect.height() + 2);
                 break;
             case MinutiaLabelPosition::LEFT:
-                typePos = QPoint(pos.x() - size/2 - margin - typeRect.width(), pos.y() + 5);
+                // Tipo abaixo do número, alinhado à direita
+                typePos = QPoint(textPos.x() + textRect.width() - typeRect.width(), textPos.y() + textRect.height() + 2);
                 break;
             case MinutiaLabelPosition::ABOVE:
-                typePos = QPoint(pos.x() - typeRect.width()/2, pos.y() - size/2 - margin - textRect.height() - typeRect.height() - 2);
+                // Tipo acima do número, centralizado
+                typePos = QPoint(pos.x() - typeRect.width()/2, textPos.y() - typeRect.height() - 2);
                 break;
             case MinutiaLabelPosition::BELOW:
-                typePos = QPoint(pos.x() - typeRect.width()/2, pos.y() + size/2 + margin + textRect.height() + typeRect.height() + 2);
+                // Tipo abaixo do número, centralizado
+                typePos = QPoint(pos.x() - typeRect.width()/2, textPos.y() + textRect.height() + 2);
                 break;
             default:
-                typePos = QPoint(pos.x() + size/2 + margin, pos.y() + 5);
+                typePos = QPoint(textPos.x(), textPos.y() + textRect.height() + 2);
         }
         
         painter.fillRect(typeRect.translated(typePos), displaySettings.labelBackgroundColor);
@@ -307,19 +335,14 @@ void MinutiaeOverlay::mousePressEvent(QMouseEvent *event) {
         
         if (minutia) {
             qDebug() << "Minutia found:" << minutia->id.left(8);
-            // Se já está selecionada e no modo de edição, alterna entre mover/rotacionar
+            
+            // Se já está em um dos modos de edição (mover/rotacionar), permite arrastar
             if (editMode && minutia->id == selectedMinutiaId && 
                 (editState == MinutiaEditState::EDITING_POSITION || editState == MinutiaEditState::EDITING_ANGLE)) {
-                // Alternar entre mover e rotacionar
-                if (editState == MinutiaEditState::EDITING_POSITION) {
-                    editState = MinutiaEditState::EDITING_ANGLE;
-                    initialAngle = minutia->angle;
-                } else {
-                    editState = MinutiaEditState::EDITING_POSITION;
-                }
-                emit editStateChanged(editState);
+                // Apenas iniciar drag, não alterar o estado
+                qDebug() << "  ✓ Iniciando drag no modo atual:" << (int)editState;
             } else {
-                // Selecionar minúcia
+                // Selecionar minúcia (não entra em modo de edição automaticamente)
                 selectedMinutiaId = minutia->id;
                 if (editMode) {
                     editState = MinutiaEditState::SELECTED;
@@ -327,6 +350,7 @@ void MinutiaeOverlay::mousePressEvent(QMouseEvent *event) {
                     editState = MinutiaEditState::IDLE;
                 }
                 initialAngle = minutia->angle;
+                qDebug() << "  ✓ Minúcia selecionada, estado:" << (int)editState;
             }
             
             isDragging = true;
@@ -405,7 +429,22 @@ void MinutiaeOverlay::mouseReleaseEvent(QMouseEvent *event) {
 }
 
 void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
+    fprintf(stderr, "[OVERLAY] 📌 MinutiaeOverlay::contextMenuEvent chamado!\n");
+    fprintf(stderr, "[OVERLAY]    - Posição do clique: (%d, %d)\n", event->pos().x(), event->pos().y());
+    fprintf(stderr, "[OVERLAY]    - currentFragment: %s\n", (currentFragment != nullptr) ? "true" : "false");
+    fprintf(stderr, "[OVERLAY]    - editMode: %s\n", editMode ? "true" : "false");
+    fprintf(stderr, "[OVERLAY]    - scaleFactor: %f\n", scaleFactor);
+    fprintf(stderr, "[OVERLAY]    - scrollOffset: (%d, %d)\n", scrollOffset.x(), scrollOffset.y());
+    fprintf(stderr, "[OVERLAY]    - imageOffset: (%d, %d)\n", imageOffset.x(), imageOffset.y());
+    
+    if (currentFragment) {
+        fprintf(stderr, "[OVERLAY]    - Número de minúcias no fragmento: %zu\n", currentFragment->minutiae.size());
+    }
+    fflush(stderr);
+    
     if (!currentFragment || !editMode) {
+        fprintf(stderr, "[OVERLAY]   ⚠️  Menu de contexto bloqueado (sem fragmento ou editMode desativado)\n");
+        fflush(stderr);
         QWidget::contextMenuEvent(event);
         return;
     }
@@ -413,9 +452,14 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
     // Verificar se clicou em uma minúcia
     Minutia* minutia = findMinutiaAt(event->pos());
     if (!minutia) {
+        fprintf(stderr, "[OVERLAY]   ⚠️  Nenhuma minúcia encontrada na posição clicada\n");
+        fflush(stderr);
         QWidget::contextMenuEvent(event);
         return;
     }
+    
+    fprintf(stderr, "[OVERLAY]   ✅ Minúcia encontrada: %s - Mostrando menu de contexto\n", minutia->id.toStdString().c_str());
+    fflush(stderr);
 
     // Se não está selecionada, selecionar
     if (minutia->id != selectedMinutiaId) {
@@ -428,15 +472,28 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
 
     // Criar menu de contexto
     QMenu menu(this);
-    menu.setStyleSheet("QMenu { font-size: 11pt; }");
+    menu.setStyleSheet(
+        "QMenu {"
+        "   background-color: white;"
+        "   color: black;"
+        "   font-size: 11pt;"
+        "   border: 1px solid #999;"
+        "}"
+        "QMenu::item:selected {"
+        "   background-color: #0078d7;"
+        "   color: white;"
+        "}"
+    );
     
-    QAction* moveAction = menu.addAction("↔️ Mover Minúcia");
+    QAction* moveAction = menu.addAction("⇔️ Mover Minúcia");
     QAction* rotateAction = menu.addAction("🔄 Rotacionar Minúcia");
+    QAction* deleteAction = menu.addAction("🗑 Remover Minúcia");
     
     menu.addSeparator();
     
     // Submenu de posição do rótulo
     QMenu* labelPosMenu = menu.addMenu("📍 Posição do Rótulo");
+    labelPosMenu->setStyleSheet(menu.styleSheet()); // Aplicar mesmo estilo
     QAction* labelRightAction = labelPosMenu->addAction("→ À Direita");
     QAction* labelLeftAction = labelPosMenu->addAction("← À Esquerda");
     QAction* labelAboveAction = labelPosMenu->addAction("↑ Acima");
@@ -461,7 +518,6 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
     menu.addSeparator();
     
     QAction* editAction = menu.addAction("✏️ Editar Propriedades...");
-    QAction* deleteAction = menu.addAction("🗑 Excluir Minúcia");
     
     // Marcar ação atual
     if (editState == MinutiaEditState::EDITING_POSITION) {
@@ -487,7 +543,9 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
     } else if (selectedAction == editAction) {
         emit minutiaDoubleClicked(minutia->id);
     } else if (selectedAction == deleteAction) {
+        qDebug() << "  🗑 Solicitado remover minúcia:" << minutia->id;
         // Emitir sinal para deletar (será capturado pelo MainWindow)
+        emit minutiaDeleteRequested(minutia->id);
         clearSelection();
     } else if (selectedAction == labelRightAction) {
         minutia->labelPosition = MinutiaLabelPosition::RIGHT;
@@ -515,7 +573,9 @@ Minutia* MinutiaeOverlay::findMinutiaAt(const QPoint& pos) {
     int baseRadius = displaySettings.markerSize / 2;
     int clickRadius = qMax(baseRadius + 15, 30); // Mínimo de 30 pixels de tolerância
     
-    qDebug() << "findMinutiaAt: pos=" << pos << "clickRadius=" << clickRadius << "minutiae count=" << currentFragment->minutiae.size();
+    fprintf(stderr, "[OVERLAY] findMinutiaAt: pos=(%d, %d) clickRadius=%d minutiae count=%zu\n", 
+            pos.x(), pos.y(), clickRadius, currentFragment->minutiae.size());
+    fflush(stderr);
 
     for (auto& minutia : currentFragment->minutiae) {
         QPoint scaledPos = scalePoint(minutia.position);
@@ -523,15 +583,18 @@ Minutia* MinutiaeOverlay::findMinutiaAt(const QPoint& pos) {
         int dy = pos.y() - scaledPos.y();
         int distance = static_cast<int>(std::sqrt(dx * dx + dy * dy));
         
-        qDebug() << "  Minutia at" << scaledPos << "distance=" << distance << "id=" << minutia.id.left(8);
+        fprintf(stderr, "[OVERLAY]   Minutia at (%d, %d) distance=%d id=%s\n", 
+                scaledPos.x(), scaledPos.y(), distance, minutia.id.left(8).toStdString().c_str());
 
         if (distance <= clickRadius) {
-            qDebug() << "  -> FOUND! Returning minutia" << minutia.id.left(8);
+            fprintf(stderr, "[OVERLAY]   -> FOUND! Returning minutia %s\n", minutia.id.left(8).toStdString().c_str());
+            fflush(stderr);
             return &minutia;
         }
     }
 
-    qDebug() << "  -> No minutia found at click position";
+    fprintf(stderr, "[OVERLAY]   -> No minutia found at click position\n");
+    fflush(stderr);
     return nullptr;
 }
 
@@ -607,11 +670,11 @@ void MinutiaeOverlay::drawEditStateIndicator(QPainter& painter, const QPoint& po
             stateText = "🔘 SELECIONADA - Botão direito para opções";
             break;
         case MinutiaEditState::EDITING_POSITION:
-            stateText = "↔️ MOVER - Arraste com botão esquerdo | Clique p/ alternar";
+            stateText = "↔️ MOVER - Arraste com botão esquerdo | Botão direito para mudar";
             indicatorColor = QColor(0, 200, 255); // Azul claro
             break;
         case MinutiaEditState::EDITING_ANGLE:
-            stateText = "🔄 ROTACIONAR - Arraste com botão esquerdo | Clique p/ alternar";
+            stateText = "🔄 ROTACIONAR - Arraste com botão esquerdo | Botão direito para mudar";
             indicatorColor = QColor(255, 165, 0); // Laranja
             break;
         default:
@@ -660,6 +723,24 @@ float MinutiaeOverlay::calculateAngleFromDrag(const QPoint& center, const QPoint
     }
     
     return degrees;
+}
+
+void MinutiaeOverlay::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Escape) {
+        if (editMode) {
+            qDebug() << "🔑 ESC pressionado - Saindo do modo de edição interativa";
+            emit exitEditModeRequested();
+            event->accept();
+            return;
+        }
+    }
+    
+    QWidget::keyPressEvent(event);
+}
+
+void MinutiaeOverlay::wheelEvent(QWheelEvent *event) {
+    // Repassar evento de scroll para o widget pai (ImageViewer) para manter o zoom funcionando
+    event->ignore();
 }
 
 } // namespace FingerprintEnhancer

@@ -13,6 +13,36 @@
 // Configurar logging do Qt
 Q_LOGGING_CATEGORY(fpenhancer, "fpenhancer")
 
+// Handler customizado para garantir que todos os logs apareçam no stderr
+void customMessageHandler(QtMsgType type, const QMessageLogContext &context, const QString &msg) {
+    QByteArray localMsg = msg.toLocal8Bit();
+    const char *file = context.file ? context.file : "";
+    const char *function = context.function ? context.function : "";
+    
+    switch (type) {
+    case QtDebugMsg:
+        fprintf(stderr, "[DEBUG] %s\n", localMsg.constData());
+        fflush(stderr);
+        break;
+    case QtInfoMsg:
+        fprintf(stderr, "[INFO] %s\n", localMsg.constData());
+        fflush(stderr);
+        break;
+    case QtWarningMsg:
+        fprintf(stderr, "[WARNING] %s\n", localMsg.constData());
+        fflush(stderr);
+        break;
+    case QtCriticalMsg:
+        fprintf(stderr, "[CRITICAL] %s\n", localMsg.constData());
+        fflush(stderr);
+        break;
+    case QtFatalMsg:
+        fprintf(stderr, "[FATAL] %s (%s:%u, %s)\n", localMsg.constData(), file, context.line, function);
+        fflush(stderr);
+        abort();
+    }
+}
+
 /**
  * @brief Configurar estilo da aplicação
  */
@@ -99,6 +129,18 @@ int main(int argc, char *argv[]) {
     // Criar aplicação
     QApplication app(argc, argv);
     
+    // Instalar handler customizado de mensagens ANTES de qualquer log
+    qInstallMessageHandler(customMessageHandler);
+    
+    // Teste imediato de logging
+    fprintf(stderr, "==========================================\n");
+    fprintf(stderr, "TESTE: Message handler instalado!\n");
+    fprintf(stderr, "==========================================\n");
+    fflush(stderr);
+    
+    qDebug() << "🧪 TESTE: qDebug() funcionando!";
+    qInfo() << "🧪 TESTE: qInfo() funcionando!";
+    
     // Configurar informações da aplicação
     app.setApplicationName("FingerprintEnhancer");
     app.setApplicationVersion("1.0.0");
@@ -106,8 +148,27 @@ int main(int argc, char *argv[]) {
     app.setOrganizationName("FingerprintEnhancer Project");
     app.setOrganizationDomain("fingerprintenhancer.org");
     
-    // Configurar logging
-    QLoggingCategory::setFilterRules("fpenhancer.debug=true");
+    // Configurar logging - HABILITAR TODOS OS NÍVEIS
+    // Formato: categoria.nível=true/false
+    // * = todas as categorias
+    QLoggingCategory::setFilterRules(
+        "mainwindow.debug=true\n"  // Habilitar DEBUG do MainWindow
+        "overlay.debug=true\n"     // Habilitar DEBUG do Overlay
+        "fpenhancer.debug=true\n"  // Habilitar DEBUG geral
+        "*.debug=true\n"           // Habilitar DEBUG de todas as categorias
+        "*.info=true\n"            // Habilitar INFO de todas as categorias
+        "*.warning=true\n"         // Habilitar WARNING
+        "*.critical=true\n"        // Habilitar CRITICAL
+        "qt.*.debug=false\n"       // Desabilitar debug interno do Qt (muito verboso)
+        "qt.*.info=false\n"        // Desabilitar info interno do Qt
+        "qt.qpa.*.debug=false"     // Desabilitar debug de QPA
+    );
+    
+    // Forçar modo debug para garantir
+    QLoggingCategory::defaultCategory()->setEnabled(QtDebugMsg, true);
+    
+    qDebug() << "🧪 TESTE FINAL: qDebug sem categoria funcionando?";
+    qCDebug(fpenhancer) << "🧪 TESTE: qCDebug(fpenhancer) funcionando!";
     
     qCInfo(fpenhancer) << "Starting FingerprintEnhancer v" << app.applicationVersion();
     qCInfo(fpenhancer) << "Built with Qt" << QT_VERSION_STR << "and OpenCV" << CV_VERSION;

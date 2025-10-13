@@ -1,7 +1,12 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include <QtWidgets/QMainWindow>
+#include <QMainWindow>
+#include <QLoggingCategory>
+
+// Categoria de logging para debug do MainWindow
+Q_DECLARE_LOGGING_CATEGORY(mainwindow)
+
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QToolBar>
 #include <QtWidgets/QStatusBar>
@@ -35,6 +40,8 @@
 #include "MinutiaEditDialog.h"
 #include "NewProjectDialog.h"
 #include "MinutiaeDisplayDialog.h"
+#include "ScaleCalibrationTool.h"
+#include "RulerWidget.h"
 #include "../afis/AFISMatcher.h"
 
 /**
@@ -60,7 +67,8 @@ public:
         MODE_ADD_MINUTIA,
         MODE_EDIT_MINUTIA,
         MODE_REMOVE_MINUTIA,
-        MODE_PAN
+        MODE_PAN,
+        MODE_CALIBRATE_SCALE
     };
 
     enum CurrentEntityType {
@@ -137,8 +145,18 @@ private slots:
 
     // Calibração de Escala
     void calibrateScale();
+    void activateScaleCalibrationMode();
+    void deactivateScaleCalibrationMode();
+    void showScaleConfig();
     void setScaleManually();
     void showScaleInfo();
+    void toggleRulers();
+    
+    // Slots para ferramenta de calibração
+    void onCalibrationCompleted(double scale, double confidence);
+    void onCalibrationCancelled();
+    void onCalibrationLineDrawn(QPoint start, QPoint end, double distance);
+    void onCalibrationRidgeCountChanged(int count);
 
     // Conversão de Espaços de Cor
     void convertToRGB();
@@ -249,6 +267,7 @@ private slots:
     ProgramState getProgramState() const { return currentProgramState; }
     void updateUIForCurrentState();
     void enableMinutiaEditingMode(bool enable);
+    void toggleInteractiveEditMode(bool enable);
 
 private:
     // Componentes principais (sem ProjectManager - usar singleton)
@@ -304,6 +323,14 @@ private:
     class CropTool *cropTool;
     class MinutiaeMarkerWidget *minutiaeMarker;
     class AFISMatcher *afisMatcher;
+    class ScaleCalibrationTool *scaleCalibrationTool;
+
+    // Réguas métricas
+    class RulerWidget *leftTopRuler;
+    class RulerWidget *leftLeftRuler;
+    class RulerWidget *rightTopRuler;
+    class RulerWidget *rightLeftRuler;
+    bool rulersVisible;
 
     // Gerenciador de estado de imagem
     class ImageState *imageState;
@@ -341,6 +368,10 @@ private:
     QLabel *imageInfoLabel;
     QLabel *scaleLabel;
     QProgressBar *progressBar;
+    
+    // Actions para sincronização
+    QAction *editModeAction;           // Menu: Modo de Edição Interativa
+    QAction *editMinutiaToolbarAction; // Toolbar: Editar Minúcia
     
     // Métodos de inicialização
     void setupUI();

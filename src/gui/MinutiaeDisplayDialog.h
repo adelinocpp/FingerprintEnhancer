@@ -13,6 +13,7 @@
 #include <QFormLayout>
 #include <QColorDialog>
 #include <QDialogButtonBox>
+#include <QCheckBox>
 #include "../core/ProjectModel.h"  // Para MinutiaLabelPosition
 
 namespace FingerprintEnhancer {
@@ -34,6 +35,8 @@ struct MinutiaeDisplaySettings {
     QColor labelBackgroundColor = QColor(255, 255, 255, 200);  // Cor de fundo dos rótulos (com alpha)
     int labelBackgroundOpacity = 200; // Opacidade (0-255)
     FingerprintEnhancer::MinutiaLabelPosition defaultLabelPosition = FingerprintEnhancer::MinutiaLabelPosition::RIGHT;  // Posição padrão dos rótulos
+    bool showLabelType = true;        // Mostrar tipo no rótulo (se false, mostra só número)
+    bool showAngles = false;          // Mostrar ângulo da minúcia
 
     // Método para obter nome do símbolo
     QString getSymbolName() const {
@@ -66,6 +69,8 @@ private slots:
     void onLabelPositionChanged(int index);
     void onChooseBackgroundColor();
     void onOpacityChanged(int value);
+    void onShowLabelTypeChanged(int state);
+    void onShowAnglesChanged(int state);
     void onAccepted();
     void onRejected();
     void updatePreview();
@@ -85,6 +90,8 @@ private:
     QPushButton* colorButton;
     QSlider* opacitySlider;
     QLabel* opacityLabel;
+    QCheckBox* showLabelTypeCheckBox;
+    QCheckBox* showAnglesCheckBox;
     QLabel* previewLabel;
     QDialogButtonBox* buttonBox;
 };

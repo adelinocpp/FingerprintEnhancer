@@ -31,6 +31,7 @@ public:
     explicit MinutiaeOverlay(QWidget *parent = nullptr);
 
     void setFragment(Fragment* fragment);
+    Fragment* getFragment() const { return currentFragment; }
     void setScaleFactor(double scale);
     void setScrollOffset(const QPoint& offset);  // Offset de scroll
     void setImageOffset(const QPoint& offset);  // Offset de centralização da imagem
@@ -43,11 +44,22 @@ public:
 
     // Modo de edição interativa
     void setEditMode(bool enabled) { 
-        editMode = enabled; 
-        if (!enabled) {
+        editMode = enabled;
+        
+        // CRÍTICO: Controlar se overlay captura eventos de mouse
+        if (enabled) {
+            // Modo edição ATIVO: overlay DEVE capturar eventos de mouse (incluindo contexto)
+            setAttribute(Qt::WA_TransparentForMouseEvents, false);
+            fprintf(stderr, "[OVERLAY] setEditMode(true) - Overlay agora CAPTURA eventos de mouse\n");
+        } else {
+            // Modo edição INATIVO: overlay transparente para eventos (passa para viewer)
+            setAttribute(Qt::WA_TransparentForMouseEvents, true);
             editState = MinutiaEditState::IDLE;
             clearSelection();
+            fprintf(stderr, "[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse\n");
         }
+        fflush(stderr);
+        
         update(); 
     }
     bool isEditMode() const { return editMode; }
@@ -69,9 +81,11 @@ public:
 signals:
     void minutiaClicked(const QString& minutiaId, const QPoint& position);
     void minutiaDoubleClicked(const QString& minutiaId);
+    void minutiaDeleteRequested(const QString& minutiaId);
     void positionChanged(const QString& minutiaId, const QPoint& newPosition);
     void angleChanged(const QString& minutiaId, float newAngle);
     void editStateChanged(MinutiaEditState newState);
+    void exitEditModeRequested();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -80,6 +94,8 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
 
 private:
     Fragment* currentFragment;

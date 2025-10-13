@@ -91,6 +91,15 @@ void MinutiaeDisplayDialog::setupUI() {
     opacityLabel = new QLabel(QString("%1%").arg(int(settings.labelBackgroundOpacity * 100.0 / 255.0)));
     opacityLayout->addWidget(opacityLabel);
     labelLayout->addLayout(opacityLayout);
+    
+    // Checkboxes para controlar exibição
+    showLabelTypeCheckBox = new QCheckBox("Exibir tipo no rótulo (se desmarcado, mostra apenas o número)");
+    showLabelTypeCheckBox->setChecked(settings.showLabelType);
+    labelLayout->addWidget(showLabelTypeCheckBox);
+    
+    showAnglesCheckBox = new QCheckBox("Exibir ângulo da minúcia");
+    showAnglesCheckBox->setChecked(settings.showAngles);
+    labelLayout->addWidget(showAnglesCheckBox);
 
     mainLayout->addWidget(labelGroup);
 
@@ -115,6 +124,11 @@ void MinutiaeDisplayDialog::setupUI() {
     connect(labelPositionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MinutiaeDisplayDialog::onLabelPositionChanged);
     connect(colorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseBackgroundColor);
     connect(opacitySlider, &QSlider::valueChanged, this, &MinutiaeDisplayDialog::onOpacityChanged);
+    
+    // CRÍTICO: Conectar checkboxes para atualização em tempo real
+    connect(showLabelTypeCheckBox, &QCheckBox::stateChanged, this, &MinutiaeDisplayDialog::onShowLabelTypeChanged);
+    connect(showAnglesCheckBox, &QCheckBox::stateChanged, this, &MinutiaeDisplayDialog::onShowAnglesChanged);
+    
     connect(buttonBox, &QDialogButtonBox::accepted, this, &MinutiaeDisplayDialog::onAccepted);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &MinutiaeDisplayDialog::onRejected);
 
@@ -168,6 +182,16 @@ void MinutiaeDisplayDialog::onAccepted() {
 void MinutiaeDisplayDialog::onRejected() {
     accepted = false;
     reject();
+}
+
+void MinutiaeDisplayDialog::onShowLabelTypeChanged(int state) {
+    settings.showLabelType = (state == Qt::Checked);
+    updatePreview();
+}
+
+void MinutiaeDisplayDialog::onShowAnglesChanged(int state) {
+    settings.showAngles = (state == Qt::Checked);
+    updatePreview();
 }
 
 void MinutiaeDisplayDialog::updateColorButton() {
@@ -258,45 +282,58 @@ void MinutiaeDisplayDialog::updatePreview() {
         }
     }
 
+    // Desenhar ângulo se habilitado (e não for CIRCLE_ARROW que já mostra)
+    if (settings.showAngles && settings.symbol != MinutiaeSymbol::CIRCLE_ARROW) {
+        int lineLength = size * 2;
+        double rad = angle * M_PI / 180.0;
+        int endX = center.x() + static_cast<int>(lineLength * cos(rad));
+        int endY = center.y() - static_cast<int>(lineLength * sin(rad));
+        painter.drawLine(center, QPoint(endX, endY));
+    }
+
     // Desenhar rótulos de exemplo baseado na posição selecionada
     if (settings.defaultLabelPosition != FingerprintEnhancer::MinutiaLabelPosition::HIDDEN) {
         QFont font;
         font.setPointSize(settings.labelFontSize);
         painter.setFont(font);
 
-        QString numberText = " 1 .";
+        QString numberText = "( 1 )";
         QString typeText = " BE .";
         QRect numberRect = painter.fontMetrics().boundingRect(numberText);
         QRect typeRect = painter.fontMetrics().boundingRect(typeText);
         
         int margin = 5;
+        
+        // Calcular altura do tipo se for exibido
+        int typeHeight = 0;
+        if (settings.showLabelType) {
+            typeHeight = typeRect.height() + 2; // +2 para espaçamento entre número e tipo
+        }
+        
         QPoint numberPos, typePos;
         
         // Calcular posições baseado em defaultLabelPosition
+        // Se não há tipo, ajustar para ficar mais próximo da marcação
         switch (settings.defaultLabelPosition) {
             case FingerprintEnhancer::MinutiaLabelPosition::RIGHT: // À direita (padrão)
                 numberPos = QPoint(center.x() + size/2 + margin, center.y() - size/2);
-                typePos = QPoint(center.x() + size/2 + margin, center.y() + 5);
                 break;
                 
             case FingerprintEnhancer::MinutiaLabelPosition::LEFT: // À esquerda
                 numberPos = QPoint(center.x() - size/2 - margin - numberRect.width(), center.y() - size/2);
-                typePos = QPoint(center.x() - size/2 - margin - typeRect.width(), center.y() + 5);
                 break;
                 
             case FingerprintEnhancer::MinutiaLabelPosition::ABOVE: // Acima
-                numberPos = QPoint(center.x() - numberRect.width()/2, center.y() - size/2 - margin - numberRect.height());
-                typePos = QPoint(center.x() - typeRect.width()/2, center.y() - size/2 - margin - numberRect.height() - typeRect.height() - 2);
+                // Se tem tipo, o número fica mais longe; se não tem, fica mais perto-
+                numberPos = QPoint(center.x() - numberRect.width()/2, center.y() - size/2 - margin - numberRect.height()); //  typeHeight
                 break;
                 
             case FingerprintEnhancer::MinutiaLabelPosition::BELOW: // Abaixo
                 numberPos = QPoint(center.x() - numberRect.width()/2, center.y() + size/2 + margin + numberRect.height());
-                typePos = QPoint(center.x() - typeRect.width()/2, center.y() + size/2 + margin + numberRect.height() + typeRect.height() + 2);
                 break;
                 
             default:
                 numberPos = QPoint(center.x() + size/2 + margin, center.y() - size/2);
-                typePos = QPoint(center.x() + size/2 + margin, center.y() + 5);
         }
 
         // Desenhar rótulo de número
@@ -304,9 +341,33 @@ void MinutiaeDisplayDialog::updatePreview() {
         painter.setPen(Qt::black);
         painter.drawText(numberPos, numberText);
 
-        // Desenhar rótulo de tipo
-        painter.fillRect(typeRect.translated(typePos), settings.labelBackgroundColor);
-        painter.drawText(typePos, typeText);
+        // Desenhar rótulo de tipo (se habilitado)
+        if (settings.showLabelType) {
+            // Tipo sempre em relação ao número
+            switch (settings.defaultLabelPosition) {
+                case FingerprintEnhancer::MinutiaLabelPosition::RIGHT:
+                    // Tipo abaixo do número, alinhado à esquerda
+                    typePos = QPoint(numberPos.x(), numberPos.y() + numberRect.height() + 2);
+                    break;
+                case FingerprintEnhancer::MinutiaLabelPosition::LEFT:
+                    // Tipo abaixo do número, alinhado à direita
+                    typePos = QPoint(numberPos.x() + numberRect.width() - typeRect.width(), numberPos.y() + numberRect.height() + 2);
+                    break;
+                case FingerprintEnhancer::MinutiaLabelPosition::ABOVE:
+                    // Tipo acima do número, centralizado
+                    typePos = QPoint(center.x() - typeRect.width()/2, numberPos.y() - typeRect.height() - 2);
+                    break;
+                case FingerprintEnhancer::MinutiaLabelPosition::BELOW:
+                    // Tipo abaixo do número, centralizado
+                    typePos = QPoint(center.x() - typeRect.width()/2, numberPos.y() + numberRect.height() + 2);
+                    break;
+                default:
+                    typePos = QPoint(numberPos.x(), numberPos.y() + numberRect.height() + 2);
+            }
+            
+            painter.fillRect(typeRect.translated(typePos), settings.labelBackgroundColor);
+            painter.drawText(typePos, typeText);
+        }
     }
 
     // Adicionar texto descritivo
