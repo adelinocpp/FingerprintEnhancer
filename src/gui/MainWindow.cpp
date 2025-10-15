@@ -11,6 +11,8 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include "ColorConversionDialog.h"
 #include "ScaleConfigDialog.h"
 #include "FragmentExportDialog.h"
+#include "ImagePropertiesDialog.h"
+#include "FragmentPropertiesDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -28,6 +30,7 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include <QtCore/QStandardPaths>
 #include <QtCore/QDir>
 #include <QtCore/QThread>
+#include <QtCore/QTimer>
 #include <QtCore/QUuid>
 #include <cmath>
 
@@ -66,6 +69,12 @@ MainWindow::MainWindow(QWidget *parent)
     , processingThread(nullptr)
     , processingWorker(nullptr)
     , isProcessing(false)
+    , imageLoaderWorker(nullptr)
+    , isLoadingImages(false)
+    , projectSaverWorker(nullptr)
+    , isSavingProject(false)
+    , saveAction(nullptr)
+    , saveAsAction(nullptr)
 {
     qCDebug(mainwindow) << "========================================";
     qCDebug(mainwindow) << "🏗️ MainWindow::MainWindow() - Construtor iniciado";
@@ -111,8 +120,8 @@ void MainWindow::createMenus() {
     fileMenu->addAction("&Novo Projeto", this, &MainWindow::newProject, QKeySequence::New);
     fileMenu->addAction("&Abrir Projeto", this, &MainWindow::openProject, QKeySequence::Open);
     fileMenu->addSeparator();
-    fileMenu->addAction("&Salvar Projeto", this, &MainWindow::saveProject, QKeySequence::Save);
-    fileMenu->addAction("Salvar Projeto &Como...", this, &MainWindow::saveProjectAs, QKeySequence::SaveAs);
+    saveAction = fileMenu->addAction("&Salvar Projeto", this, &MainWindow::saveProject, QKeySequence::Save);
+    saveAsAction = fileMenu->addAction("Salvar Projeto &Como...", this, &MainWindow::saveProjectAs, QKeySequence::SaveAs);
     fileMenu->addSeparator();
     fileMenu->addAction("&Editar Informações do Projeto...", this, &MainWindow::editProjectInfo, QKeySequence("Ctrl+Shift+E"));
     fileMenu->addAction("&Limpar Projeto", this, &MainWindow::clearProject, QKeySequence("Ctrl+Shift+N"));
@@ -270,16 +279,16 @@ void MainWindow::createToolBars() {
     // Toolbar de ferramentas
     QToolBar *toolsToolBar = addToolBar("Ferramentas");
 
-    QAction *noneToolAction = toolsToolBar->addAction("🖱️ Nenhuma");
+    noneToolAction = toolsToolBar->addAction("🖱️ Selecionar");
     noneToolAction->setCheckable(true);
     noneToolAction->setChecked(true);
     connect(noneToolAction, &QAction::triggered, [this]() { setToolMode(MODE_NONE); });
 
-    QAction *cropToolAction = toolsToolBar->addAction("✂️ Recortar");
+    cropToolAction = toolsToolBar->addAction("✂️ Recortar");
     cropToolAction->setCheckable(true);
     connect(cropToolAction, &QAction::triggered, [this]() { setToolMode(MODE_CROP); });
 
-    QAction *addMinutiaAction = toolsToolBar->addAction("➕ Adicionar Minúcia");
+    addMinutiaAction = toolsToolBar->addAction("➕ Adicionar Minúcia");
     addMinutiaAction->setCheckable(true);
     connect(addMinutiaAction, &QAction::triggered, [this]() { setToolMode(MODE_ADD_MINUTIA); });
 
@@ -628,6 +637,10 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onExportImageRequested);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::exportFragmentRequested,
             this, &MainWindow::onExportFragmentRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::editImagePropertiesRequested,
+            this, &MainWindow::onEditImagePropertiesRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::editFragmentPropertiesRequested,
+            this, &MainWindow::onEditFragmentPropertiesRequested);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::sendToLeftPanelRequested,
             [this](const QString& entityId, bool isFragment) {
                 CurrentEntityType type = isFragment ? ENTITY_FRAGMENT : ENTITY_IMAGE;
@@ -741,49 +754,126 @@ void MainWindow::openProject() {
 }
 
 void MainWindow::saveProject() {
-    using PM = FingerprintEnhancer::ProjectManager;
-
-    if (!PM::instance().hasOpenProject()) {
-        QMessageBox::information(this, "Info", "Nenhum projeto aberto");
+    using namespace FingerprintEnhancer;
+    
+    // Verificar se há projeto aberto
+    ProjectManager& pm = ProjectManager::instance();
+    if (!pm.hasOpenProject()) {
+        QMessageBox::warning(this, "Nenhum Projeto",
+                           "Não há projeto aberto para salvar.");
         return;
     }
 
-    FingerprintEnhancer::Project* project = PM::instance().getCurrentProject();
-    if (project->filePath.isEmpty()) {
-        saveProjectAs();
-    } else {
-        if (PM::instance().saveProject()) {
-            statusLabel->setText("Projeto salvo");
-            updateWindowTitle();
-        } else {
-            QMessageBox::warning(this, "Erro", "Falha ao salvar o projeto");
-        }
+    // Verificar se já está salvando
+    if (isSavingProject) {
+        QMessageBox::information(this, "Salvamento em Progresso",
+                               "Aguarde o salvamento atual terminar.");
+        return;
     }
+
+    // Verificar se projeto tem caminho (senão usar saveProjectAs)
+    QString projectPath = pm.getCurrentProjectPath();
+    if (projectPath.isEmpty()) {
+        saveProjectAs();
+        return;
+    }
+
+    // Criar worker para salvar em thread separada
+    projectSaverWorker = new ProjectSaverWorker(this);
+    projectSaverWorker->setSaveParameters(""); // Usa caminho atual do projeto
+    projectSaverWorker->setTimeout(300000); // 5 minutos
+
+    // Conectar signals
+    connect(projectSaverWorker, &ProjectSaverWorker::progressUpdated,
+            this, &MainWindow::onSaveProgress);
+    connect(projectSaverWorker, &ProjectSaverWorker::saveCompleted,
+            this, &MainWindow::onSaveCompleted);
+    connect(projectSaverWorker, &ProjectSaverWorker::saveTimeout,
+            this, &MainWindow::onSaveTimeout);
+    connect(projectSaverWorker, &ProjectSaverWorker::finished,
+            projectSaverWorker, &QObject::deleteLater);
+
+    // Configurar interface para saving
+    isSavingProject = true;
+    progressBar->setVisible(true);
+    progressBar->setMaximum(0); // Indeterminate progress
+    
+    // Desabilitar botões de salvar
+    if (saveAction) saveAction->setEnabled(false);
+    if (saveAsAction) saveAsAction->setEnabled(false);
+
+    statusLabel->setText("Salvando projeto...");
+
+    // Iniciar salvamento
+    projectSaverWorker->start();
 }
 
 void MainWindow::saveProjectAs() {
-    using PM = FingerprintEnhancer::ProjectManager;
-
-    if (!PM::instance().hasOpenProject()) {
-        QMessageBox::information(this, "Info", "Nenhum projeto aberto");
+    using namespace FingerprintEnhancer;
+    
+    // Verificar se há projeto aberto
+    ProjectManager& pm = ProjectManager::instance();
+    if (!pm.hasOpenProject()) {
+        QMessageBox::warning(this, "Nenhum Projeto",
+                           "Não há projeto aberto para salvar.");
         return;
     }
 
-    QString fileName = QFileDialog::getSaveFileName(this,
-        "Salvar Projeto Como", "", "Projeto FingerprintEnhancer (*.fpe)");
-
-    if (!fileName.isEmpty()) {
-        if (!fileName.endsWith(".fpe")) {
-            fileName += ".fpe";
-        }
-
-        if (PM::instance().saveProjectAs(fileName)) {
-            statusLabel->setText("Projeto salvo: " + QFileInfo(fileName).fileName());
-            updateWindowTitle();
-        } else {
-            QMessageBox::warning(this, "Erro", "Falha ao salvar o projeto");
-        }
+    // Verificar se já está salvando
+    if (isSavingProject) {
+        QMessageBox::information(this, "Salvamento em Progresso",
+                               "Aguarde o salvamento atual terminar.");
+        return;
     }
+
+    // Obter diretório padrão
+    QString defaultDir = getProjectDirectory();
+    
+    // Diálogo para escolher caminho
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        "Salvar Projeto Como",
+        defaultDir + "/projeto.fpe",
+        "Projetos FingerprintEnhancer (*.fpe);;Todos os Arquivos (*.*)"
+    );
+
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // Garantir extensão .fpe
+    if (!filePath.endsWith(".fpe", Qt::CaseInsensitive)) {
+        filePath += ".fpe";
+    }
+
+    // Criar worker para salvar em thread separada
+    projectSaverWorker = new ProjectSaverWorker(this);
+    projectSaverWorker->setSaveParameters(filePath);
+    projectSaverWorker->setTimeout(300000); // 5 minutos
+
+    // Conectar signals
+    connect(projectSaverWorker, &ProjectSaverWorker::progressUpdated,
+            this, &MainWindow::onSaveProgress);
+    connect(projectSaverWorker, &ProjectSaverWorker::saveCompleted,
+            this, &MainWindow::onSaveCompleted);
+    connect(projectSaverWorker, &ProjectSaverWorker::saveTimeout,
+            this, &MainWindow::onSaveTimeout);
+    connect(projectSaverWorker, &ProjectSaverWorker::finished,
+            projectSaverWorker, &QObject::deleteLater);
+
+    // Configurar interface para saving
+    isSavingProject = true;
+    progressBar->setVisible(true);
+    progressBar->setMaximum(0); // Indeterminate progress
+    
+    // Desabilitar botões de salvar
+    if (saveAction) saveAction->setEnabled(false);
+    if (saveAsAction) saveAsAction->setEnabled(false);
+
+    statusLabel->setText("Salvando projeto...");
+
+    // Iniciar salvamento
+    projectSaverWorker->start();
 }
 
 void MainWindow::editProjectInfo() {
@@ -926,34 +1016,73 @@ void MainWindow::clearProject() {
 }
 
 void MainWindow::openImage() {
-    using PM = FingerprintEnhancer::ProjectManager;
-
-    QString fileName = QFileDialog::getOpenFileName(this,
-        "Abrir Imagem", "", "Arquivos de Imagem (*.png *.jpg *.jpeg *.bmp *.tiff)");
-
-    if (!fileName.isEmpty()) {
-        // Se não há projeto aberto, criar um automaticamente
-        if (!PM::instance().hasOpenProject()) {
-            if (!PM::instance().createNewProject("Projeto sem título", "")) {
-                QMessageBox::warning(this, "Erro", "Não foi possível criar projeto");
-                return;
-            }
-            fragmentManager->setProject(PM::instance().getCurrentProject());
+    using namespace FingerprintEnhancer;
+    
+    // Verificar se há projeto aberto, senão criar automaticamente
+    ProjectManager& pm = ProjectManager::instance();
+    if (!pm.hasOpenProject()) {
+        // Criar projeto automático com nome baseado na data/hora
+        QString projectName = QString("Projeto %1").arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm"));
+        
+        if (!pm.createNewProject(projectName, "")) {
+            QMessageBox::warning(this, "Erro", 
+                               "Não foi possível criar projeto automaticamente.\n"
+                               "Por favor, crie um projeto manualmente primeiro.");
+            return;
         }
-
-        // Adicionar imagem ao projeto
-        FingerprintEnhancer::FingerprintImage* img = PM::instance().addImageToProject(fileName);
-        if (img) {
-            currentImageId = img->id;
-
-            // Auto-selecionar a imagem recém-adicionada
-            setCurrentEntity(img->id, ENTITY_IMAGE);
-
-            statusLabel->setText("Imagem carregada e selecionada: " + QFileInfo(fileName).fileName());
-        } else {
-            QMessageBox::warning(this, "Erro", "Falha ao carregar imagem");
-        }
+        
+        // Atualizar interface com novo projeto
+        fragmentManager->setProject(pm.getCurrentProject());
+        updateWindowTitle();
+        statusLabel->setText(QString("✓ Projeto criado automaticamente: %1").arg(projectName));
     }
+
+    // Verificar se já está carregando imagens
+    if (isLoadingImages) {
+        QMessageBox::information(this, "Carregamento em Progresso",
+                               "Aguarde o carregamento das imagens anteriores terminar.");
+        return;
+    }
+
+    // Obter diretório do projeto como padrão
+    QString defaultDir = getProjectDirectory();
+
+    // Permitir seleção múltipla de arquivos
+    QStringList filePaths = QFileDialog::getOpenFileNames(
+        this,
+        "Selecionar Imagens para Adicionar ao Projeto",
+        defaultDir,
+        "Imagens (*.png *.jpg *.jpeg *.bmp *.tiff *.tif);;Todos os Arquivos (*.*)"
+    );
+
+    if (filePaths.isEmpty()) {
+        return;
+    }
+
+    // Criar worker para carregar imagens em thread separada
+    imageLoaderWorker = new ImageLoaderWorker(filePaths, this);
+    
+    // Conectar signals
+    connect(imageLoaderWorker, &ImageLoaderWorker::progressUpdated,
+            this, &MainWindow::onImageLoadProgress);
+    connect(imageLoaderWorker, &ImageLoaderWorker::imageLoaded,
+            this, &MainWindow::onImageLoaded);
+    connect(imageLoaderWorker, &ImageLoaderWorker::loadingFailed,
+            this, &MainWindow::onImageLoadingFailed);
+    connect(imageLoaderWorker, &ImageLoaderWorker::allImagesLoaded,
+            this, &MainWindow::onAllImagesLoaded);
+    connect(imageLoaderWorker, &ImageLoaderWorker::finished,
+            imageLoaderWorker, &QObject::deleteLater);
+
+    // Configurar interface para loading
+    isLoadingImages = true;
+    progressBar->setVisible(true);
+    progressBar->setMaximum(filePaths.size());
+    progressBar->setValue(0);
+    statusLabel->setText(QString("Carregando %1 imagem(ns)...").arg(filePaths.size()));
+
+    // Iniciar carregamento
+    imageLoaderWorker->start();
 }
 
 void MainWindow::saveImage() {
@@ -1351,25 +1480,30 @@ void MainWindow::configureMinutiaeDisplay() {
         leftMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
         rightMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
 
-        // Se a posição padrão mudou, perguntar se quer aplicar a todas as minúcias
+        // Se a posição padrão mudou, perguntar se quer aplicar a todas as minúcias do projeto
         if (oldSettings.defaultLabelPosition != minutiaeDisplaySettings.defaultLabelPosition) {
             QMessageBox::StandardButton reply = QMessageBox::question(this,
                 "Aplicar Posição do Rótulo",
-                "Deseja aplicar a nova posição padrão do rótulo a TODAS as minúcias do fragmento atual?",
+                "Deseja aplicar a nova posição padrão do rótulo a TODAS as minúcias do projeto?",
                 QMessageBox::Yes | QMessageBox::No);
             
             if (reply == QMessageBox::Yes) {
-                // Aplicar a todas as minúcias do fragmento atual
+                // Aplicar a todas as minúcias de todos os fragmentos do projeto
                 using PM = FingerprintEnhancer::ProjectManager;
-                if (currentEntityType == ENTITY_FRAGMENT && !currentFragmentId.isEmpty()) {
-                    Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentFragmentId);
-                    if (frag) {
-                        for (auto& minutia : frag->minutiae) {
-                            minutia.labelPosition = minutiaeDisplaySettings.defaultLabelPosition;
+                Project* project = PM::instance().getCurrentProject();
+                if (project) {
+                    int totalMinutiae = 0;
+                    for (auto& image : project->images) {
+                        for (auto& fragment : image.fragments) {
+                            for (auto& minutia : fragment.minutiae) {
+                                minutia.labelPosition = minutiaeDisplaySettings.defaultLabelPosition;
+                                totalMinutiae++;
+                            }
                         }
-                        qDebug() << "✅ Posição do rótulo aplicada a" << frag->minutiae.size() << "minúcias";
-                        statusLabel->setText(QString("Posição do rótulo aplicada a %1 minúcias").arg(frag->minutiae.size()));
                     }
+                    qDebug() << "✅ Posição do rótulo aplicada a" << totalMinutiae << "minúcias em todo o projeto";
+                    statusLabel->setText(QString("Posição do rótulo aplicada a %1 minúcias do projeto").arg(totalMinutiae));
+                    PM::instance().getCurrentProject()->setModified();
                 }
             }
         }
@@ -1416,8 +1550,17 @@ void MainWindow::toggleRightViewer() {
             rightViewerContainer->setStyleSheet("");
             updateActivePanelEntity();
         }
+        
+        // Ajustar painel esquerdo ao novo tamanho
+        processedImageViewer->zoomToFit();
     } else {
         rightViewerContainer->show();
+        
+        // Ajustar ambos os painéis ao novo tamanho
+        QTimer::singleShot(100, [this]() {
+            processedImageViewer->zoomToFit();
+            secondImageViewer->zoomToFit();
+        });
     }
 }
 
@@ -1448,9 +1591,18 @@ void MainWindow::updateActivePanelEntity() {
         minutiaeOverlay = leftMinutiaeOverlay;
     }
 
+    // Selecionar entidade na árvore de projeto
+    if (!currentEntityId.isEmpty()) {
+        if (currentEntityType == ENTITY_IMAGE) {
+            fragmentManager->selectImage(currentEntityId);
+        } else if (currentEntityType == ENTITY_FRAGMENT) {
+            fragmentManager->selectFragment(currentEntityId);
+        }
+    }
+
     // Atualizar informações na barra de status
     if (!currentEntityId.isEmpty()) {
-        statusLabel->setText(QString("Painel %1 ativo: %2")
+        statusLabel->setText(QString("✓ Painel %1 ativo: %2 selecionado")
             .arg(activePanel ? "direito" : "esquerdo")
             .arg(currentEntityType == ENTITY_IMAGE ? "Imagem" : "Fragmento"));
     }
@@ -1903,9 +2055,16 @@ void MainWindow::applyCrop() {
     fragmentManager->updateView();
 
     // Selecionar o fragmento criado automaticamente
-    setCurrentEntity(img->fragments.last().id, ENTITY_FRAGMENT);
+    QString newFragmentId = img->fragments.last().id;
+    setCurrentEntity(newFragmentId, ENTITY_FRAGMENT);
+    
+    // Selecionar na árvore de projeto
+    fragmentManager->selectFragment(newFragmentId);
+    
+    // Aplicar ajuste ao tamanho do painel
+    activeViewer->zoomToFit();
 
-    statusLabel->setText(QString("Fragmento criado: %1x%2 px")
+    statusLabel->setText(QString("✓ Fragmento criado e selecionado: %1×%2 px")
                         .arg(selection.width()).arg(selection.height()));
 }
 
@@ -3020,6 +3179,11 @@ void MainWindow::setToolMode(ToolMode mode) {
     if (mode != MODE_CALIBRATE_SCALE) {
         deactivateScaleCalibrationMode();
     }
+    
+    // Atualizar estado dos botões da toolbar
+    noneToolAction->setChecked(mode == MODE_NONE);
+    cropToolAction->setChecked(mode == MODE_CROP);
+    addMinutiaAction->setChecked(mode == MODE_ADD_MINUTIA);
 
     // Obter viewer e overlay ativos
     ImageViewer* activeViewer = getActiveViewer();
@@ -3028,7 +3192,7 @@ void MainWindow::setToolMode(ToolMode mode) {
     // Ativar o modo selecionado apenas no painel ativo
     switch (mode) {
         case MODE_NONE:
-            statusLabel->setText("Ferramenta: Nenhuma (navegação)");
+            statusLabel->setText("Ferramenta: Selecionar (navegação)");
             break;
 
         case MODE_CROP:
@@ -3187,7 +3351,9 @@ void MainWindow::createFragmentFromWholeImage() {
 
     if (fragment) {
         onFragmentSelected(fragment->id);
-        statusLabel->setText("Imagem inteira destacada como fragmento");
+        fragmentManager->selectFragment(fragment->id);
+        getActiveViewer()->zoomToFit();
+        statusLabel->setText("✓ Imagem inteira destacada como fragmento e selecionada");
     } else {
         QMessageBox::warning(this, "Erro", "Falha ao criar fragmento");
     }
@@ -3324,6 +3490,9 @@ void MainWindow::loadCurrentEntityToView() {
     } else {
         activeOverlay->setFragment(nullptr);
     }
+    
+    // Aplicar ajuste ao tamanho do painel
+    activeViewer->zoomToFit();
 }
 
 cv::Mat& MainWindow::getCurrentWorkingImage() {
@@ -3553,6 +3722,9 @@ void MainWindow::onDeleteFragmentRequested(const QString& fragmentId) {
         minutiaeOverlay->setFragment(nullptr);
     }
 
+    // Selecionar item anterior antes de remover
+    fragmentManager->selectPreviousItem();
+    
     // Remover fragmento da imagem pai
     FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(parentImageId);
     if (img) {
@@ -3562,7 +3734,7 @@ void MainWindow::onDeleteFragmentRequested(const QString& fragmentId) {
         // Atualizar view do gerenciador
         fragmentManager->updateView();
 
-        statusLabel->setText(QString("Fragmento excluído (%1 minúcia(s) removida(s))").arg(minutiaeCount));
+        statusLabel->setText(QString("✓ Fragmento excluído (%1 minúcia(s) removida(s))").arg(minutiaeCount));
     }
 }
 
@@ -3671,6 +3843,9 @@ void MainWindow::onDeleteImageRequested(const QString& imageId) {
         rightMinutiaeOverlay->setFragment(nullptr);
     }
 
+    // Selecionar item anterior antes de remover
+    fragmentManager->selectPreviousItem();
+    
     // Remover imagem do projeto
     PM::instance().getCurrentProject()->removeImage(imageId);
     PM::instance().getCurrentProject()->setModified();
@@ -3678,7 +3853,7 @@ void MainWindow::onDeleteImageRequested(const QString& imageId) {
     // Atualizar view do gerenciador
     fragmentManager->updateView();
 
-    statusLabel->setText(QString("Imagem removida (%1 fragmento(s) e %2 minúcia(s) excluídos)")
+    statusLabel->setText(QString("✓ Imagem removida (%1 fragmento(s) e %2 minúcia(s) excluídos)")
                         .arg(fragmentCount).arg(totalMinutiae));
 }
 
@@ -3750,11 +3925,15 @@ void MainWindow::onExportImageRequested(const QString& imageId) {
 
     QFileInfo originalFileInfo(img->originalFilePath);
     QString suggestedName = originalFileInfo.baseName() + "_processada." + originalFileInfo.suffix();
+    
+    // Usar diretório do projeto como padrão
+    QString projectDir = getProjectDirectory();
+    QString defaultPath = projectDir + "/" + suggestedName;
 
     QString fileName = QFileDialog::getSaveFileName(
         this,
         "Exportar Imagem Processada",
-        suggestedName,
+        defaultPath,
         "PNG (*.png);;JPEG (*.jpg *.jpeg);;TIFF (*.tif *.tiff);;BMP (*.bmp);;Todos (*.*)"
     );
 
@@ -3801,8 +3980,11 @@ void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
         scale = 10.0;  // Escala padrão
     }
     
+    // Obter diretório do projeto como padrão para exportação
+    QString projectDir = getProjectDirectory();
+    
     // Abrir diálogo avançado de exportação
-    FragmentExportDialog dialog(frag, scale, this);
+    FragmentExportDialog dialog(frag, scale, this, projectDir);
     
     if (dialog.exec() == QDialog::Accepted) {
         QString errorMessage;
@@ -3828,6 +4010,52 @@ void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
         } else {
             QMessageBox::warning(this, "Erro", QString("Falha ao exportar:\n%1").arg(errorMessage));
         }
+    }
+}
+
+void MainWindow::onEditImagePropertiesRequested(const QString& imageId) {
+    using PM = FingerprintEnhancer::ProjectManager;
+    
+    FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(imageId);
+    if (!img) {
+        QMessageBox::warning(this, "Erro", "Imagem não encontrada");
+        return;
+    }
+    
+    FingerprintEnhancer::ImagePropertiesDialog dialog(img, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // Atualizar comentários
+        img->notes = dialog.getComments();
+        img->modifiedAt = QDateTime::currentDateTime();
+        PM::instance().getCurrentProject()->setModified();
+        
+        // Atualizar visualização da árvore
+        fragmentManager->updateView();
+        
+        statusLabel->setText("Propriedades da imagem atualizadas");
+    }
+}
+
+void MainWindow::onEditFragmentPropertiesRequested(const QString& fragmentId) {
+    using PM = FingerprintEnhancer::ProjectManager;
+    
+    FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(fragmentId);
+    if (!frag) {
+        QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
+        return;
+    }
+    
+    FingerprintEnhancer::FragmentPropertiesDialog dialog(frag, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // Atualizar comentários
+        frag->notes = dialog.getComments();
+        frag->modifiedAt = QDateTime::currentDateTime();
+        PM::instance().getCurrentProject()->setModified();
+        
+        // Atualizar visualização da árvore
+        fragmentManager->updateView();
+        
+        statusLabel->setText("Propriedades do fragmento atualizadas");
     }
 }
 
@@ -3996,4 +4224,97 @@ void MainWindow::toggleInteractiveEditMode(bool enable) {
             editMinutiaToolbarAction->blockSignals(false);
         }
     }
+}
+// ============================================================================
+// OPERAÇÕES ASSÍNCRONAS - Carregamento e Salvamento
+// ============================================================================
+
+QString MainWindow::getProjectDirectory() const {
+    using namespace FingerprintEnhancer;
+    ProjectManager& pm = ProjectManager::instance();
+    
+    if (!pm.hasOpenProject()) {
+        return QDir::homePath();
+    }
+    
+    QString projectPath = pm.getCurrentProjectPath();
+    if (projectPath.isEmpty()) {
+        return QDir::homePath();
+    }
+    
+    QFileInfo fileInfo(projectPath);
+    return fileInfo.absolutePath();
+}
+
+void MainWindow::onImageLoadProgress(int current, int total, const QString& currentFile) {
+    progressBar->setValue(current);
+    statusLabel->setText(QString("Carregando %1/%2: %3").arg(current).arg(total).arg(currentFile));
+    QApplication::processEvents();
+}
+
+void MainWindow::onImageLoaded(const QString& filePath, const cv::Mat& image) {
+    using namespace FingerprintEnhancer;
+    ProjectManager& pm = ProjectManager::instance();
+    FingerprintImage* img = pm.addImageToProject(filePath);
+    
+    if (!img) {
+        qWarning() << "Falha ao adicionar imagem ao projeto:" << filePath;
+    }
+}
+
+void MainWindow::onImageLoadingFailed(const QString& filePath, const QString& error) {
+    QFileInfo fileInfo(filePath);
+    qWarning() << "Falha ao carregar" << fileInfo.fileName() << ":" << error;
+    statusLabel->setText(QString("Erro: %1").arg(fileInfo.fileName()));
+}
+
+void MainWindow::onAllImagesLoaded(int successCount, int failCount) {
+    isLoadingImages = false;
+    progressBar->setVisible(false);
+    
+    QString message;
+    if (failCount == 0) {
+        message = QString("✓ %1 imagem(ns) carregada(s) com sucesso!").arg(successCount);
+        statusLabel->setText(message);
+        QMessageBox::information(this, "Carregamento Concluído", message);
+    } else {
+        message = QString("Carregamento concluído: %1 sucesso, %2 falha(s)")
+                    .arg(successCount).arg(failCount);
+        statusLabel->setText(message);
+        QMessageBox::warning(this, "Carregamento Concluído", message);
+    }
+
+    if (fragmentManager) {
+        fragmentManager->updateView();
+    }
+    updateStatusBar();
+}
+
+void MainWindow::onSaveProgress(const QString& message) {
+    statusLabel->setText(message);
+    QApplication::processEvents();
+}
+
+void MainWindow::onSaveCompleted(bool success, const QString& message) {
+    isSavingProject = false;
+    progressBar->setVisible(false);
+    
+    if (saveAction) saveAction->setEnabled(true);
+    if (saveAsAction) saveAsAction->setEnabled(true);
+
+    if (success) {
+        statusLabel->setText("✓ Projeto salvo com sucesso!");
+        QMessageBox::information(this, "Salvamento Concluído", message);
+        updateWindowTitle();
+    } else {
+        statusLabel->setText("✗ Falha ao salvar projeto");
+        QMessageBox::critical(this, "Erro ao Salvar", message);
+    }
+}
+
+void MainWindow::onSaveTimeout() {
+    statusLabel->setText("✗ Timeout: Salvamento cancelado");
+    QMessageBox::critical(this, "Timeout",
+                         "O salvamento do projeto demorou mais de 5 minutos e foi cancelado.\n"
+                         "Isso pode indicar um projeto muito grande ou problemas no disco.");
 }

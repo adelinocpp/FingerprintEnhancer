@@ -42,6 +42,8 @@ Q_DECLARE_LOGGING_CATEGORY(mainwindow)
 #include "MinutiaeDisplayDialog.h"
 #include "ScaleCalibrationTool.h"
 #include "RulerWidget.h"
+#include "ImageLoaderWorker.h"
+#include "ProjectSaverWorker.h"
 #include "../afis/AFISMatcher.h"
 
 /**
@@ -210,6 +212,17 @@ private slots:
     void onProcessingFailed(QString errorMessage);
     void onProcessingStatus(QString message);
 
+    // Image loading com threading
+    void onImageLoadProgress(int current, int total, const QString& currentFile);
+    void onImageLoaded(const QString& filePath, const cv::Mat& image);
+    void onImageLoadingFailed(const QString& filePath, const QString& error);
+    void onAllImagesLoaded(int successCount, int failCount);
+
+    // Project saving com threading
+    void onSaveProgress(const QString& message);
+    void onSaveCompleted(bool success, const QString& message);
+    void onSaveTimeout();
+
     // Slots para gerenciamento de projeto
     void onProjectModified();
     void onImageAdded(const QString& imageId);
@@ -227,6 +240,8 @@ private slots:
     void onDuplicateFragmentRequested(const QString& fragmentId);
     void onExportImageRequested(const QString& imageId);
     void onExportFragmentRequested(const QString& fragmentId);
+    void onEditImagePropertiesRequested(const QString& imageId);
+    void onEditFragmentPropertiesRequested(const QString& fragmentId);
 
     // Slots para ferramentas
     void setToolMode(ToolMode mode);
@@ -373,6 +388,11 @@ private:
     QAction *editModeAction;           // Menu: Modo de Edição Interativa
     QAction *editMinutiaToolbarAction; // Toolbar: Editar Minúcia
     
+    // Actions da toolbar de ferramentas
+    QAction *noneToolAction;           // Ferramenta: Selecionar
+    QAction *cropToolAction;           // Ferramenta: Recortar
+    QAction *addMinutiaAction;         // Ferramenta: Adicionar Minúcia
+    
     // Métodos de inicialização
     void setupUI();
     void createMenus();
@@ -402,6 +422,19 @@ private:
     QThread *processingThread;
     class ProcessingWorker *processingWorker;
     bool isProcessing;
+
+    // Image loading threading
+    class FingerprintEnhancer::ImageLoaderWorker *imageLoaderWorker;
+    bool isLoadingImages;
+
+    // Project saving threading
+    class FingerprintEnhancer::ProjectSaverWorker *projectSaverWorker;
+    bool isSavingProject;
+    QAction *saveAction;
+    QAction *saveAsAction;
+
+    // Helper methods
+    QString getProjectDirectory() const;
 };
 
 #endif // MAINWINDOW_H

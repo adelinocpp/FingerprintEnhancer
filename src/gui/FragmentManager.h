@@ -33,6 +33,12 @@ public:
     QString getSelectedImageId() const;
     QString getSelectedFragmentId() const;
     QString getSelectedMinutiaId() const;
+    
+    // Seleção programática
+    void selectImage(const QString& imageId);
+    void selectFragment(const QString& fragmentId);
+    void selectMinutia(const QString& minutiaId);
+    void selectPreviousItem();
 
 signals:
     void imageSelected(const QString& imageId);
@@ -55,6 +61,9 @@ signals:
     void duplicateFragmentRequested(const QString& fragmentId);
     void exportImageRequested(const QString& imageId);
     void exportFragmentRequested(const QString& fragmentId);
+    
+    void editImagePropertiesRequested(const QString& imageId);
+    void editFragmentPropertiesRequested(const QString& fragmentId);
 
 private slots:
     void onTreeItemSelectionChanged();

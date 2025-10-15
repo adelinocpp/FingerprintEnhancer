@@ -461,6 +461,14 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
             bool isFragment = (itemType == "FRAGMENT");
             emit makeCurrentRequested(entityId, isFragment);
         });
+        
+        menu.addAction("📝 Editar Propriedades...", [this, entityId, itemType]() {
+            if (itemType == "IMAGE") {
+                emit editImagePropertiesRequested(entityId);
+            } else {
+                emit editFragmentPropertiesRequested(entityId);
+            }
+        });
 
         menu.addSeparator();
 
@@ -618,6 +626,92 @@ bool FragmentManager::eventFilter(QObject* obj, QEvent* event) {
     }
     
     return QWidget::eventFilter(obj, event);
+}
+
+// Métodos de seleção programática
+void FragmentManager::selectImage(const QString& imageId) {
+    if (imageId.isEmpty()) return;
+    
+    QTreeWidgetItemIterator it(hierarchyTree);
+    while (*it) {
+        QString itemType = (*it)->data(0, Qt::UserRole).toString();
+        QString entityId = (*it)->data(0, Qt::UserRole + 1).toString();
+        
+        if (itemType == "IMAGE" && entityId == imageId) {
+            hierarchyTree->setCurrentItem(*it);
+            hierarchyTree->scrollToItem(*it);
+            return;
+        }
+        ++it;
+    }
+}
+
+void FragmentManager::selectFragment(const QString& fragmentId) {
+    if (fragmentId.isEmpty()) return;
+    
+    QTreeWidgetItemIterator it(hierarchyTree);
+    while (*it) {
+        QString itemType = (*it)->data(0, Qt::UserRole).toString();
+        QString entityId = (*it)->data(0, Qt::UserRole + 1).toString();
+        
+        if (itemType == "FRAGMENT" && entityId == fragmentId) {
+            hierarchyTree->setCurrentItem(*it);
+            hierarchyTree->scrollToItem(*it);
+            (*it)->parent()->setExpanded(true);  // Expandir pai (imagem)
+            return;
+        }
+        ++it;
+    }
+}
+
+void FragmentManager::selectMinutia(const QString& minutiaId) {
+    if (minutiaId.isEmpty()) return;
+    
+    QTreeWidgetItemIterator it(hierarchyTree);
+    while (*it) {
+        QString itemType = (*it)->data(0, Qt::UserRole).toString();
+        QString entityId = (*it)->data(0, Qt::UserRole + 1).toString();
+        
+        if (itemType == "MINUTIA" && entityId == minutiaId) {
+            hierarchyTree->setCurrentItem(*it);
+            hierarchyTree->scrollToItem(*it);
+            // Expandir ancestrais
+            if ((*it)->parent() && (*it)->parent()->parent()) {
+                (*it)->parent()->parent()->setExpanded(true);  // Imagem
+                (*it)->parent()->setExpanded(true);  // Fragmento
+            }
+            return;
+        }
+        ++it;
+    }
+}
+
+void FragmentManager::selectPreviousItem() {
+    QTreeWidgetItem* currentItem = hierarchyTree->currentItem();
+    if (!currentItem) return;
+    
+    // Obter índice do item atual no pai
+    QTreeWidgetItem* parent = currentItem->parent();
+    
+    if (parent) {
+        // Item tem pai (é fragmento ou minúcia)
+        int index = parent->indexOfChild(currentItem);
+        if (index > 0) {
+            // Selecionar irmão anterior
+            parent->child(index - 1)->setSelected(true);
+            hierarchyTree->setCurrentItem(parent->child(index - 1));
+        } else {
+            // É o primeiro filho, selecionar o pai
+            hierarchyTree->setCurrentItem(parent);
+        }
+    } else {
+        // Item é de nível superior (imagem)
+        int index = hierarchyTree->indexOfTopLevelItem(currentItem);
+        if (index > 0) {
+            // Selecionar imagem anterior
+            hierarchyTree->setCurrentItem(hierarchyTree->topLevelItem(index - 1));
+        }
+    }
 }
 
 } // namespace FingerprintEnhancer

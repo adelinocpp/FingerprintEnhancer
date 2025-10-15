@@ -20,14 +20,16 @@
 FragmentExportDialog::FragmentExportDialog(
     const FingerprintEnhancer::Fragment* frag,
     double currentScale,
-    QWidget *parent)
+    QWidget *parent,
+    const QString& defaultDirectory)
     : QDialog(parent),
       fragment(frag),
       scale(currentScale),
       markerColor(255, 0, 0),      // Vermelho
       textColor(255, 0, 0),        // Vermelho
       labelBgColor(255, 255, 255), // Branco
-      updatingResolution(false)
+      updatingResolution(false),
+      defaultExportDirectory(defaultDirectory)
 {
     setWindowTitle("💾 Exportar Fragmento");
     setModal(true);
@@ -37,6 +39,12 @@ FragmentExportDialog::FragmentExportDialog(
     
     setupUI();
     loadDefaultSettings();
+    
+    // Configurar caminho padrão de exportação
+    if (!defaultExportDirectory.isEmpty()) {
+        setDefaultExportPath(defaultExportDirectory);
+    }
+    
     updatePreview();
 }
 
@@ -359,6 +367,28 @@ void FragmentExportDialog::loadDefaultSettings()
     labelPositionComboBox->setCurrentIndex(0);
 }
 
+void FragmentExportDialog::setDefaultExportPath(const QString& directory)
+{
+    // Usar diretório do projeto como base para exportação
+    if (directory.isEmpty()) {
+        return;
+    }
+    
+    // Sanitizar ID do fragmento
+    QString sanitizedId = fragment->id.left(8);
+    sanitizedId.replace(QRegularExpression("[^a-zA-Z0-9]"), "");
+    if (sanitizedId.isEmpty()) {
+        sanitizedId = "fragmento";
+    }
+    
+    // Criar nome sugerido baseado no fragmento
+    QString suggestedName = QString("fragmento_%1_marcado.png").arg(sanitizedId);
+    QString fullPath = QDir(directory).filePath(suggestedName);
+    
+    // Atualizar o campo de caminho
+    filePathEdit->setText(fullPath);
+}
+
 void FragmentExportDialog::onBrowseClicked()
 {
     QString filter;
@@ -370,10 +400,20 @@ void FragmentExportDialog::onBrowseClicked()
         default: filter = "Todos (*.*)"; break;
     }
     
+    // Usar caminho atual ou diretório do projeto como inicial
+    QString initialPath = filePathEdit->text();
+    if (initialPath.isEmpty() && !defaultExportDirectory.isEmpty()) {
+        QString sanitizedId = fragment->id.left(8);
+        sanitizedId.replace(QRegularExpression("[^a-zA-Z0-9]"), "");
+        if (sanitizedId.isEmpty()) sanitizedId = "fragmento";
+        QString suggestedName = QString("fragmento_%1_marcado.png").arg(sanitizedId);
+        initialPath = QDir(defaultExportDirectory).filePath(suggestedName);
+    }
+    
     QString fileName = QFileDialog::getSaveFileName(
         this,
         "Salvar Fragmento",
-        filePathEdit->text(),
+        initialPath,
         filter
     );
     

@@ -32,7 +32,8 @@ public:
     explicit FragmentExportDialog(
         const FingerprintEnhancer::Fragment* fragment,
         double currentScale,
-        QWidget *parent = nullptr
+        QWidget *parent = nullptr,
+        const QString& defaultDirectory = QString()
     );
     ~FragmentExportDialog();
 
@@ -73,6 +74,7 @@ private slots:
 private:
     void setupUI();
     void loadDefaultSettings();
+    void setDefaultExportPath(const QString& directory);
     cv::Mat renderPreview();
     cv::Mat renderExportImage(int width, int height);
     void drawMinutiaSymbol(cv::Mat& img, const cv::Point& center, int radius, 
@@ -138,6 +140,7 @@ private:
     int originalWidth;
     int originalHeight;
     bool updatingResolution;
+    QString defaultExportDirectory;
     
     // Configurações de visualização
     FingerprintEnhancer::MinutiaeDisplaySettings displaySettings;
