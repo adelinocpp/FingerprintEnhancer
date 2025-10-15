@@ -5,6 +5,10 @@
 #include <QtGui/QPainter>
 #include <QtGui/QFontMetrics>
 #include <QtGui/QRegion>
+#include <QtGui/QPolygon>
+#include <QtGui/QKeyEvent>
+#include <QtGui/QMouseEvent>
+#include <QtCore/QEvent>
 #include <QtCore/QDebug>
 
 // ==================== CropOverlayLabel ====================
@@ -33,7 +37,7 @@ void CropOverlayLabel::paintEvent(QPaintEvent *event) {
     QLabel::paintEvent(event);
 
     // Depois desenha o overlay se estiver habilitado
-    if (overlayEnabled && imageViewer && !overlayRect.isNull()) {
+    if (overlayEnabled && imageViewer) {
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing);
 
@@ -75,7 +79,7 @@ void CropOverlayLabel::paintEvent(QPaintEvent *event) {
             painter.setBrush(handleBrush);
             painter.setPen(QPen(Qt::black, 1));
 
-            // Cantos
+            // Cantos (quadrados)
             painter.drawRect(widgetRect.topLeft().x() - handleSize/2,
                             widgetRect.topLeft().y() - handleSize/2, handleSize, handleSize);
             painter.drawRect(widgetRect.topRight().x() - handleSize/2,
@@ -84,6 +88,46 @@ void CropOverlayLabel::paintEvent(QPaintEvent *event) {
                             widgetRect.bottomLeft().y() - handleSize/2, handleSize, handleSize);
             painter.drawRect(widgetRect.bottomRight().x() - handleSize/2,
                             widgetRect.bottomRight().y() - handleSize/2, handleSize, handleSize);
+            
+            // Bordas (losangos/diamantes sobre a linha)
+            int diamondSize = handleSize + 4;
+            
+            // Calcular centros das bordas
+            int centerX = (widgetRect.left() + widgetRect.right()) / 2;
+            int centerY = (widgetRect.top() + widgetRect.bottom()) / 2;
+            
+            // Desenhar losango no topo (sobre a borda superior)
+            QPolygon topDiamond;
+            int half = diamondSize / 2;
+            topDiamond << QPoint(centerX, widgetRect.top() - half)
+                       << QPoint(centerX + half, widgetRect.top())
+                       << QPoint(centerX, widgetRect.top() + half)
+                       << QPoint(centerX - half, widgetRect.top());
+            painter.drawPolygon(topDiamond);
+            
+            // Desenhar losango na base (sobre a borda inferior)
+            QPolygon bottomDiamond;
+            bottomDiamond << QPoint(centerX, widgetRect.bottom() - half)
+                          << QPoint(centerX + half, widgetRect.bottom())
+                          << QPoint(centerX, widgetRect.bottom() + half)
+                          << QPoint(centerX - half, widgetRect.bottom());
+            painter.drawPolygon(bottomDiamond);
+            
+            // Desenhar losango à esquerda (sobre a borda esquerda)
+            QPolygon leftDiamond;
+            leftDiamond << QPoint(widgetRect.left(), centerY - half)
+                        << QPoint(widgetRect.left() + half, centerY)
+                        << QPoint(widgetRect.left(), centerY + half)
+                        << QPoint(widgetRect.left() - half, centerY);
+            painter.drawPolygon(leftDiamond);
+            
+            // Desenhar losango à direita (sobre a borda direita)
+            QPolygon rightDiamond;
+            rightDiamond << QPoint(widgetRect.right() - half, centerY)
+                         << QPoint(widgetRect.right(), centerY - half)
+                         << QPoint(widgetRect.right() + half, centerY)
+                         << QPoint(widgetRect.right(), centerY + half);
+            painter.drawPolygon(rightDiamond);
 
             // Desenhar dimensões com fundo
             QString dimensions = QString("%1 x %2 px")
@@ -115,8 +159,10 @@ const double ImageViewer::ZOOM_STEP = 1.2;
 
 ImageViewer::ImageViewer(QWidget *parent)
     : QScrollArea(parent), scaleFactor(1.0), panning(false), syncViewer(nullptr), syncEnabled(true),
-      cropModeEnabled(false), isSelecting(false) {
+      cropModeEnabled(false), isSelecting(false), isMovingSelection(false), isResizingEdge(false),
+      activeEdgeHandle(EDGE_NONE) {
     imageLabel = new CropOverlayLabel(this);
+    setFocusPolicy(Qt::StrongFocus);  // Permitir receber eventos de teclado
     imageLabel->setBackgroundRole(QPalette::Base);
     imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     imageLabel->setScaledContents(true);
@@ -125,7 +171,6 @@ ImageViewer::ImageViewer(QWidget *parent)
 
     // Habilitar mouse tracking para recorte
     setMouseTracking(true);
-    imageLabel->setMouseTracking(true);
 
     // Conectar scrollbars para emitir sinal quando scroll mudar
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, this, &ImageViewer::onScrollBarValueChanged);
@@ -239,11 +284,56 @@ void ImageViewer::wheelEvent(QWheelEvent *event) {
 }
 
 void ImageViewer::mousePressEvent(QMouseEvent *event) {
+    fprintf(stderr, "\n=== mousePressEvent ===\n");
+    fflush(stderr);
+    
     if (event->button() == Qt::LeftButton) {
         QPoint imagePos = widgetToImage(event->pos());
+        QPoint labelPos = imageLabel->mapFromGlobal(viewport()->mapToGlobal(event->pos()));
+        
+        fprintf(stderr, "event->pos: (%d, %d)\n", event->pos().x(), event->pos().y());
+        fprintf(stderr, "imagePos: (%d, %d)\n", imagePos.x(), imagePos.y());
+        fprintf(stderr, "cropSelection: (%d, %d, %d, %d)\n", 
+                cropSelection.x(), cropSelection.y(), cropSelection.width(), cropSelection.height());
+        fflush(stderr);
 
         if (cropModeEnabled) {
-            // Modo de recorte: iniciar seleção
+            fprintf(stderr, "cropMode ATIVO\n");
+            fflush(stderr);
+            
+            // 1. Verificar se clicou em losango (handle de redimensionamento)
+            EdgeHandle handle = getEdgeHandleAtPoint(labelPos);
+            fprintf(stderr, "handle: %d\n", handle);
+            fflush(stderr);
+            
+            if (handle != EDGE_NONE && !cropSelection.isNull()) {
+                // Redimensionar borda específica
+                fprintf(stderr, "-> REDIMENSIONAR BORDA\n");
+                fflush(stderr);
+                isResizingEdge = true;
+                activeEdgeHandle = handle;
+                cropStart = imagePos;
+                event->accept();
+                return;
+            }
+            
+            // 2. Verificar se clicou DENTRO da seleção (mas não no losango)
+            bool dentro = cropSelection.contains(imagePos);
+            fprintf(stderr, "cropSelection.contains(imagePos): %s\n", dentro ? "TRUE" : "FALSE");
+            fflush(stderr);
+            
+            if (!cropSelection.isNull() && dentro) {
+                // Mover seleção inteira
+                fprintf(stderr, "-> MOVER SELEÇÃO INTEIRA\n");
+                fflush(stderr);
+                isMovingSelection = true;
+                cropStart = imagePos;
+                setCursor(Qt::ClosedHandCursor);
+                event->accept();
+                return;
+            }
+            
+            // 3. Clicou fora: iniciar nova seleção
             isSelecting = true;
             cropStart = imagePos;
             cropEnd = imagePos;
@@ -263,7 +353,72 @@ void ImageViewer::mousePressEvent(QMouseEvent *event) {
 void ImageViewer::mouseMoveEvent(QMouseEvent *event) {
     QPoint imagePos = widgetToImage(event->pos());
 
-    if (cropModeEnabled && isSelecting) {
+    // Mover seleção inteira (clicou e está arrastando de dentro da seleção)
+    if (cropModeEnabled && isMovingSelection && !cropSelection.isNull()) {
+        QPoint delta = imagePos - cropStart;
+        QRect newSelection = cropSelection.translated(delta);
+        
+        // Limitar à área da imagem (clamping)
+        if (!currentImage.empty()) {
+            QRect imageRect(0, 0, currentImage.cols, currentImage.rows);
+            
+            // Garantir que a seleção não saia dos limites da imagem
+            if (newSelection.left() < 0) {
+                newSelection.moveLeft(0);
+            }
+            if (newSelection.top() < 0) {
+                newSelection.moveTop(0);
+            }
+            if (newSelection.right() >= currentImage.cols) {
+                newSelection.moveRight(currentImage.cols - 1);
+            }
+            if (newSelection.bottom() >= currentImage.rows) {
+                newSelection.moveBottom(currentImage.rows - 1);
+            }
+        }
+        
+        cropSelection = newSelection;
+        cropStart = imagePos;  // Atualizar posição de referência
+        imageLabel->setOverlayRect(cropSelection);
+        emit cropSelectionChanged(cropSelection);
+    }
+    // Redimensionar borda específica (arrastando losango)
+    else if (cropModeEnabled && isResizingEdge && activeEdgeHandle != EDGE_NONE) {
+        QRect newSelection = cropSelection;
+        
+        switch (activeEdgeHandle) {
+            case EDGE_TOP:
+                newSelection.setTop(imagePos.y());
+                break;
+            case EDGE_BOTTOM:
+                newSelection.setBottom(imagePos.y());
+                break;
+            case EDGE_LEFT:
+                newSelection.setLeft(imagePos.x());
+                break;
+            case EDGE_RIGHT:
+                newSelection.setRight(imagePos.x());
+                break;
+            default:
+                break;
+        }
+        
+        // Normalizar e validar
+        newSelection = newSelection.normalized();
+        if (newSelection.width() >= 10 && newSelection.height() >= 10) {
+            // Limitar à área da imagem
+            if (!currentImage.empty()) {
+                QRect imageRect(0, 0, currentImage.cols, currentImage.rows);
+                cropSelection = newSelection.intersected(imageRect);
+            } else {
+                cropSelection = newSelection;
+            }
+            imageLabel->setOverlayRect(cropSelection);
+            emit cropSelectionChanged(cropSelection);
+        }
+    }
+    // Desenhar nova seleção
+    else if (cropModeEnabled && isSelecting) {
         // Atualizar seleção de recorte
         cropEnd = imagePos;
         QRect newSelection = QRect(cropStart, cropEnd).normalized();
@@ -279,8 +434,9 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event) {
         // Atualizar overlay no label
         imageLabel->setOverlayRect(cropSelection);
         emit cropSelectionChanged(cropSelection);
-    } else if (panning) {
-        // Panning normal
+    }
+    // Panning normal
+    else if (panning) {
         QPoint delta = event->pos() - lastPanPoint;
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
         verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
@@ -303,6 +459,24 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event) {
                 emit cropSelectionChanged(cropSelection);
             }
         }
+        
+        // Finalizar movimento de seleção
+        if (isMovingSelection) {
+            isMovingSelection = false;
+            if (!cropSelection.isNull()) {
+                emit cropSelectionChanged(cropSelection);
+            }
+        }
+        
+        // Finalizar redimensionamento de borda
+        if (isResizingEdge) {
+            isResizingEdge = false;
+            activeEdgeHandle = EDGE_NONE;
+            if (!cropSelection.isNull()) {
+                emit cropSelectionChanged(cropSelection);
+            }
+        }
+        
         panning = false;
         setCursor(Qt::ArrowCursor);
     }
@@ -368,14 +542,24 @@ void ImageViewer::centerImage() {
 // ==================== FUNÇÕES DE RECORTE ====================
 
 void ImageViewer::setCropMode(bool enabled) {
+    fprintf(stderr, "[ImageViewer] setCropMode(%s)\n", enabled ? "TRUE" : "FALSE");
+    fflush(stderr);
     cropModeEnabled = enabled;
-    imageLabel->setOverlayEnabled(enabled);
     if (!enabled) {
+        clearCropSelection();
         isSelecting = false;
-        cropSelection = QRect();
-        imageLabel->clearOverlay();
+        isMovingSelection = false;
+        isResizingEdge = false;
+        activeEdgeHandle = EDGE_NONE;
+        setCursor(Qt::ArrowCursor);
     }
-    setCursor(enabled ? Qt::CrossCursor : Qt::ArrowCursor);
+    imageLabel->setOverlayEnabled(enabled);
+    
+    // Garantir que o viewport recebe os eventos
+    if (enabled) {
+        viewport()->setFocus();
+        setFocus();
+    }
 }
 
 void ImageViewer::setCropSelection(const QRect& rect) {
@@ -427,5 +611,68 @@ QPoint ImageViewer::getImageOffset() const {
     }
 
     return QPoint(offsetX, offsetY);
+}
+
+void ImageViewer::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Escape) {
+        if (cropModeEnabled && !cropSelection.isNull()) {
+            // ESC cancela a seleção inteira
+            clearCropSelection();
+            setCursor(Qt::ArrowCursor);
+            event->accept();
+            return;
+        }
+    }
+    QScrollArea::keyPressEvent(event);
+}
+
+ImageViewer::EdgeHandle ImageViewer::getEdgeHandleAtPoint(const QPoint &widgetPos) const {
+    if (cropSelection.isNull()) {
+        return EDGE_NONE;
+    }
+    
+    // Converter seleção para coordenadas do widget
+    QRect widgetRect(
+        cropSelection.x() * scaleFactor,
+        cropSelection.y() * scaleFactor,
+        cropSelection.width() * scaleFactor,
+        cropSelection.height() * scaleFactor
+    );
+    
+    int handleSize = 12;  // Tamanho do losango
+    int centerX = (widgetRect.left() + widgetRect.right()) / 2;
+    int centerY = (widgetRect.top() + widgetRect.bottom()) / 2;
+    
+    // Verificar losango no topo
+    if (isPointInDiamondHandle(widgetPos, QPoint(centerX, widgetRect.top()), handleSize)) {
+        return EDGE_TOP;
+    }
+    
+    // Verificar losango na base
+    if (isPointInDiamondHandle(widgetPos, QPoint(centerX, widgetRect.bottom()), handleSize)) {
+        return EDGE_BOTTOM;
+    }
+    
+    // Verificar losango à esquerda
+    if (isPointInDiamondHandle(widgetPos, QPoint(widgetRect.left(), centerY), handleSize)) {
+        return EDGE_LEFT;
+    }
+    
+    // Verificar losango à direita
+    if (isPointInDiamondHandle(widgetPos, QPoint(widgetRect.right(), centerY), handleSize)) {
+        return EDGE_RIGHT;
+    }
+    
+    return EDGE_NONE;
+}
+
+bool ImageViewer::isPointInDiamondHandle(const QPoint &widgetPos, const QPoint &handleCenter, int size) const {
+    // Verificar se o ponto está dentro do losango usando distância Manhattan
+    int dx = qAbs(widgetPos.x() - handleCenter.x());
+    int dy = qAbs(widgetPos.y() - handleCenter.y());
+    int half = size / 2;
+    
+    // Ponto está dentro do losango se a soma das distâncias é menor que o raio
+    return (dx + dy) <= half + 2;  // +2 para tolerância
 }
 

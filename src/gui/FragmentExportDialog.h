@@ -42,6 +42,7 @@ public:
     bool includeMinutiae() const { return includeMinutiaeCheck->isChecked(); }
     int getMarkerSize() const { return markerSizeSpinBox->value(); }
     int getFontSize() const { return fontSizeSpinBox->value(); }
+    int getLineWidth() const { return lineWidthSpinBox->value(); }
     int getOutputWidth() const { return widthSpinBox->value(); }
     int getOutputHeight() const { return heightSpinBox->value(); }
     int getDPI() const { return dpiSpinBox->value(); }
@@ -78,7 +79,7 @@ private:
     cv::Mat renderPreview();
     cv::Mat renderExportImage(int width, int height);
     void drawMinutiaSymbol(cv::Mat& img, const cv::Point& center, int radius, 
-                          float angle, const cv::Scalar& color);
+                          float angle, const cv::Scalar& color, int lineWidth = 2);
     void drawMinutiaLabels(cv::Mat& img, const cv::Point& center,
                           const QString& numberLabel, const QString& typeLabel,
                           FingerprintEnhancer::MinutiaLabelPosition labelPos,
@@ -111,6 +112,7 @@ private:
     QCheckBox *includeMinutiaeCheck;
     QSpinBox *markerSizeSpinBox;
     QSpinBox *fontSizeSpinBox;
+    QSpinBox *lineWidthSpinBox;  // Nova opção: largura da linha
     QComboBox *symbolComboBox;
     QComboBox *labelPositionComboBox;
     QCheckBox *showNumbersCheck;

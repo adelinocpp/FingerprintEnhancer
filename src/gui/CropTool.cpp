@@ -1,5 +1,7 @@
 #include "CropTool.h"
 #include <QCursor>
+#include <QKeyEvent>
+#include <QPolygon>
 #include <algorithm>
 
 CropTool::CropTool(QObject *parent)
@@ -60,21 +62,22 @@ void CropTool::draw(QPainter &painter, double scaleFactor) {
     painter.drawRect(selectionRect);
 
     // Desenhar handles de redimensionamento se selecionado
-    if (state == State::Selected || state == State::Moving) {
+    if (state == State::Selected || state == State::Moving || state == State::MovingWithMouseOnly) {
         painter.setBrush(QBrush(handleColor));
         painter.setPen(QPen(Qt::black, 1));
 
-        // Cantos
+        // Cantos (quadrados)
         painter.drawRect(getHandleRect(selectionRect.topLeft(), scaleFactor));
         painter.drawRect(getHandleRect(selectionRect.topRight(), scaleFactor));
         painter.drawRect(getHandleRect(selectionRect.bottomLeft(), scaleFactor));
         painter.drawRect(getHandleRect(selectionRect.bottomRight(), scaleFactor));
 
-        // Lados
-        painter.drawRect(getHandleRect(QPoint(selectionRect.center().x(), selectionRect.top()), scaleFactor));
-        painter.drawRect(getHandleRect(QPoint(selectionRect.center().x(), selectionRect.bottom()), scaleFactor));
-        painter.drawRect(getHandleRect(QPoint(selectionRect.left(), selectionRect.center().y()), scaleFactor));
-        painter.drawRect(getHandleRect(QPoint(selectionRect.right(), selectionRect.center().y()), scaleFactor));
+        // Lados (LOSANGOS/DIAMANTES) - Novidade!
+        int diamondSize = handleSize + 4;  // Losangos um pouco maiores
+        drawDiamondHandle(painter, QPoint(selectionRect.center().x(), selectionRect.top()), diamondSize);
+        drawDiamondHandle(painter, QPoint(selectionRect.center().x(), selectionRect.bottom()), diamondSize);
+        drawDiamondHandle(painter, QPoint(selectionRect.left(), selectionRect.center().y()), diamondSize);
+        drawDiamondHandle(painter, QPoint(selectionRect.right(), selectionRect.center().y()), diamondSize);
     }
 
     painter.restore();
@@ -132,6 +135,13 @@ bool CropTool::handleMouseMove(QMouseEvent *event, double scaleFactor) {
             return true;
 
         case State::Moving:
+            moveSelection(delta);
+            lastMousePos = pos;
+            emit selectionChanged(selectionRect);
+            return true;
+        
+        case State::MovingWithMouseOnly:
+            // Modo especial: move apenas com movimento do mouse (sem segurar botão)
             moveSelection(delta);
             lastMousePos = pos;
             emit selectionChanged(selectionRect);
@@ -294,8 +304,43 @@ QCursor CropTool::getCursorForState(State state) const {
         case State::ResizingRight:
             return Qt::SizeHorCursor;
         case State::Moving:
+        case State::MovingWithMouseOnly:
             return Qt::SizeAllCursor;
         default:
             return Qt::CrossCursor;
     }
+}
+
+void CropTool::drawDiamondHandle(QPainter &painter, const QPoint &center, int size) {
+    // Desenhar losango (diamante) rotacionado 45 graus
+    QPolygon diamond;
+    int half = size / 2;
+    
+    diamond << QPoint(center.x(), center.y() - half)        // Topo
+            << QPoint(center.x() + half, center.y())        // Direita
+            << QPoint(center.x(), center.y() + half)        // Baixo
+            << QPoint(center.x() - half, center.y());       // Esquerda
+    
+    painter.drawPolygon(diamond);
+}
+
+void CropTool::setMovingWithMouseMode(bool enabled) {
+    if (enabled && state == State::Selected) {
+        state = State::MovingWithMouseOnly;
+        // Inicializar lastMousePos com posição atual do mouse
+        lastMousePos = QCursor::pos();
+    } else if (!enabled && state == State::MovingWithMouseOnly) {
+        state = State::Selected;
+    }
+}
+
+bool CropTool::handleKeyPress(QKeyEvent *event) {
+    // ESC cancela modo MovingWithMouseOnly
+    if (event->key() == Qt::Key_Escape) {
+        if (state == State::MovingWithMouseOnly) {
+            state = State::Selected;
+            return true;
+        }
+    }
+    return false;
 }

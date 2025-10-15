@@ -183,6 +183,15 @@ void FragmentExportDialog::setupUI()
             this, &FragmentExportDialog::onAnySettingChanged);
     markersLayout->addRow("Tamanho fonte:", fontSizeSpinBox);
     
+    lineWidthSpinBox = new QSpinBox();
+    lineWidthSpinBox->setRange(1, 10);
+    lineWidthSpinBox->setValue(2);
+    lineWidthSpinBox->setSuffix(" px");
+    lineWidthSpinBox->setToolTip("Largura da linha de desenho da marcação");
+    connect(lineWidthSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &FragmentExportDialog::onAnySettingChanged);
+    markersLayout->addRow("Largura da linha:", lineWidthSpinBox);
+    
     // Posição do rótulo
     labelPositionComboBox = new QComboBox();
     labelPositionComboBox->addItem("À Direita", (int)FingerprintEnhancer::MinutiaLabelPosition::RIGHT);
@@ -624,6 +633,8 @@ cv::Mat FragmentExportDialog::renderExportImage(int width, int height)
             displaySettings.labelBackgroundOpacity
         );
         
+        int lineWidth = lineWidthSpinBox->value();
+        
         for (int i = 0; i < fragment->minutiae.size(); ++i) {
             const auto& m = fragment->minutiae[i];
             cv::Point center(
@@ -631,8 +642,8 @@ cv::Mat FragmentExportDialog::renderExportImage(int width, int height)
                 (int)(m.position.y() * scaleFactor)
             );
             
-            // Desenhar símbolo da minúcia
-            drawMinutiaSymbol(result, center, markerRadius, m.angle, markerColorCV);
+            // Desenhar símbolo da minúcia com largura configurável
+            drawMinutiaSymbol(result, center, markerRadius, m.angle, markerColorCV, lineWidth);
             
             // Desenhar ângulo adicional se habilitado
             if (displaySettings.showAngles && 
@@ -643,7 +654,7 @@ cv::Mat FragmentExportDialog::renderExportImage(int width, int height)
                     center.x + (int)(lineLength * std::cos(angle)),
                     center.y - (int)(lineLength * std::sin(angle))
                 );
-                cv::line(result, center, endPoint, markerColorCV, 2, cv::LINE_AA);
+                cv::line(result, center, endPoint, markerColorCV, lineWidth, cv::LINE_AA);
             }
             
             // Desenhar rótulo baseado nas configurações
@@ -672,33 +683,33 @@ cv::Mat FragmentExportDialog::renderExportImage(int width, int height)
 }
 
 void FragmentExportDialog::drawMinutiaSymbol(cv::Mat& img, const cv::Point& center, 
-                                             int radius, float angle, const cv::Scalar& color)
+                                             int radius, float angle, const cv::Scalar& color, int lineWidth)
 {
     using MS = FingerprintEnhancer::MinutiaeSymbol;
     MS symbol = static_cast<MS>(symbolComboBox->currentData().toInt());
     
     switch (symbol) {
         case MS::CIRCLE:
-            cv::circle(img, center, radius, color, 2, cv::LINE_AA);
+            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
             break;
             
         case MS::CIRCLE_X: {
-            cv::circle(img, center, radius, color, 2, cv::LINE_AA);
+            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
             int offset = radius / 2;
             cv::line(img, cv::Point(center.x - offset, center.y - offset),
-                    cv::Point(center.x + offset, center.y + offset), color, 2, cv::LINE_AA);
+                    cv::Point(center.x + offset, center.y + offset), color, lineWidth, cv::LINE_AA);
             cv::line(img, cv::Point(center.x - offset, center.y + offset),
-                    cv::Point(center.x + offset, center.y - offset), color, 2, cv::LINE_AA);
+                    cv::Point(center.x + offset, center.y - offset), color, lineWidth, cv::LINE_AA);
             break;
         }
         
         case MS::CIRCLE_ARROW: {
-            cv::circle(img, center, radius, color, 2, cv::LINE_AA);
+            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
             double rad = angle * M_PI / 180.0;
             int arrowLen = radius * 1.5;
             cv::Point endPt(center.x + (int)(arrowLen * std::cos(rad)),
                            center.y - (int)(arrowLen * std::sin(rad)));
-            cv::line(img, center, endPt, color, 2, cv::LINE_AA);
+            cv::line(img, center, endPt, color, lineWidth, cv::LINE_AA);
             // Pontas da seta
             int headSize = radius / 3;
             double angle1 = rad + M_PI * 3.0 / 4.0;
@@ -707,18 +718,18 @@ void FragmentExportDialog::drawMinutiaSymbol(cv::Mat& img, const cv::Point& cent
                           endPt.y - (int)(headSize * std::sin(angle1)));
             cv::Point head2(endPt.x + (int)(headSize * std::cos(angle2)),
                           endPt.y - (int)(headSize * std::sin(angle2)));
-            cv::line(img, endPt, head1, color, 2, cv::LINE_AA);
-            cv::line(img, endPt, head2, color, 2, cv::LINE_AA);
+            cv::line(img, endPt, head1, color, lineWidth, cv::LINE_AA);
+            cv::line(img, endPt, head2, color, lineWidth, cv::LINE_AA);
             break;
         }
         
         case MS::CIRCLE_CROSS: {
-            cv::circle(img, center, radius, color, 2, cv::LINE_AA);
+            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
             int offset = radius / 2;
             cv::line(img, cv::Point(center.x - offset, center.y),
-                    cv::Point(center.x + offset, center.y), color, 2, cv::LINE_AA);
+                    cv::Point(center.x + offset, center.y), color, lineWidth, cv::LINE_AA);
             cv::line(img, cv::Point(center.x, center.y - offset),
-                    cv::Point(center.x, center.y + offset), color, 2, cv::LINE_AA);
+                    cv::Point(center.x, center.y + offset), color, lineWidth, cv::LINE_AA);
             break;
         }
         

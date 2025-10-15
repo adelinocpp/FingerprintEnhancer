@@ -23,6 +23,7 @@ public:
         Selecting,
         Selected,
         Moving,
+        MovingWithMouseOnly,  // Modo movimento apenas com mouse (sem clicar)
         ResizingTopLeft,
         ResizingTopRight,
         ResizingBottomLeft,
@@ -55,6 +56,13 @@ public:
     bool handleMousePress(QMouseEvent *event, double scaleFactor);
     bool handleMouseMove(QMouseEvent *event, double scaleFactor);
     bool handleMouseRelease(QMouseEvent *event, double scaleFactor);
+    
+    // Processar eventos de teclado
+    bool handleKeyPress(QKeyEvent *event);
+
+    // Modo movimento apenas com mouse
+    void setMovingWithMouseMode(bool enabled);
+    bool isMovingWithMouseMode() const { return state == State::MovingWithMouseOnly; }
 
     // Recortar imagem
     cv::Mat cropImage(const cv::Mat &image) const;
@@ -80,6 +88,7 @@ private:
     // Métodos auxiliares
     State getResizeState(const QPoint &pos, double scaleFactor) const;
     QRect getHandleRect(const QPoint &center, double scaleFactor) const;
+    void drawDiamondHandle(QPainter &painter, const QPoint &center, int size);
     void updateSelectionFromDrag(const QPoint &current);
     void moveSelection(const QPoint &delta);
     void resizeSelection(const QPoint &delta, State resizeState);

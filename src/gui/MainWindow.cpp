@@ -29,9 +29,13 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include <QtGui/QMouseEvent>
 #include <QtCore/QStandardPaths>
 #include <QtCore/QDir>
+#include <QtCore/QFile>
 #include <QtCore/QThread>
 #include <QtCore/QTimer>
 #include <QtCore/QUuid>
+#include <QtCore/QJsonObject>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
 #include <cmath>
 
 #ifndef M_PI
@@ -510,6 +514,27 @@ void MainWindow::createLeftPanel() {
     basicLayout->addWidget(skeletonizeButton);
 
     enhancementLayout->addWidget(enhancementGroup);
+    
+    // Grupo de operações de conversão
+    QGroupBox *conversionGroup = new QGroupBox("Conversão e Ajustes");
+    QVBoxLayout *conversionLayout = new QVBoxLayout(conversionGroup);
+    
+    QPushButton *claheButton = new QPushButton("Aplicar CLAHE");
+    QPushButton *toGrayscaleButton = new QPushButton("Converter para Cinza");
+    QPushButton *invertColorsButton = new QPushButton("Inverter Cores");
+    QPushButton *adjustBrightnessContrastButton = new QPushButton("Ajustar Brilho e Contraste");
+    
+    claheButton->setToolTip("Contrast Limited Adaptive Histogram Equalization");
+    toGrayscaleButton->setToolTip("Converter imagem para escala de cinza");
+    invertColorsButton->setToolTip("Inverter cores da imagem");
+    adjustBrightnessContrastButton->setToolTip("Aplicar valores de brilho e contraste dos sliders acima");
+    
+    conversionLayout->addWidget(adjustBrightnessContrastButton);
+    conversionLayout->addWidget(claheButton);
+    conversionLayout->addWidget(toGrayscaleButton);
+    conversionLayout->addWidget(invertColorsButton);
+    
+    enhancementLayout->addWidget(conversionGroup);
     enhancementLayout->addStretch();
 
     leftPanel->addTab(enhancementTab, "Realce");
@@ -583,6 +608,22 @@ void MainWindow::connectSignals() {
     connect(skeletonizeButton, &QPushButton::clicked, this, &MainWindow::skeletonizeImage);
     connect(extractMinutiaeButton, &QPushButton::clicked, this, &MainWindow::extractMinutiae);
     connect(compareButton, &QPushButton::clicked, this, &MainWindow::compareMinutiae);
+    
+    // Conectar novos botões de conversão/ajuste (findChild para acessar botões)
+    QPushButton* claheBtn = findChild<QPushButton*>();
+    if (claheBtn && claheBtn->text() == "Aplicar CLAHE") {
+        connect(claheBtn, &QPushButton::clicked, this, &MainWindow::applyCLAHE);
+    }
+    QPushButton* toGrayscaleBtn = findChild<QPushButton*>();
+    for (auto btn : findChildren<QPushButton*>()) {
+        if (btn->text() == "Converter para Cinza") {
+            connect(btn, &QPushButton::clicked, this, &MainWindow::convertToGrayscale);
+        } else if (btn->text() == "Inverter Cores") {
+            connect(btn, &QPushButton::clicked, this, &MainWindow::invertColors);
+        } else if (btn->text() == "Ajustar Brilho e Contraste") {
+            connect(btn, &QPushButton::clicked, this, &MainWindow::applyBrightnessContrast);
+        }
+    }
     connect(chartButton, &QPushButton::clicked, this, &MainWindow::generateChart);
 
     // Configurar menus de contexto nos visualizadores
@@ -721,17 +762,112 @@ void MainWindow::updateWindowTitle() {
 void MainWindow::newProject() {
     using PM = FingerprintEnhancer::ProjectManager;
 
+    // Verificar se há projeto aberto
+    if (PM::instance().hasOpenProject()) {
+        FingerprintEnhancer::Project* currentProj = PM::instance().getCurrentProject();
+        
+        // Perguntar sobre salvar SOMENTE se projeto foi modificado
+        if (currentProj && currentProj->modified) {
+            int result = QMessageBox::question(
+                this, 
+                "Salvar Projeto Atual?",
+                "O projeto atual possui alterações não salvas.\n"
+                "Deseja salvar antes de criar um novo projeto?",
+                QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,
+                QMessageBox::Yes
+            );
+            
+            if (result == QMessageBox::Cancel) {
+                return;  // Cancelar criação de novo projeto
+            }
+            
+            if (result == QMessageBox::Yes) {
+                saveProject();  // Salvar projeto atual
+            }
+        }
+        
+        // SEMPRE limpar visualizações e fechar projeto (modificado OU NÃO)
+        currentEntityType = ENTITY_NONE;
+        currentEntityId.clear();
+        
+        // Limpar viewers
+        if (processedImageViewer) {
+            processedImageViewer->clearImage();
+        }
+        if (secondImageViewer) {
+            secondImageViewer->clearImage();
+        }
+        
+        // Limpar overlays
+        if (leftMinutiaeOverlay) {
+            leftMinutiaeOverlay->clearMinutiae();
+        }
+        if (rightMinutiaeOverlay) {
+            rightMinutiaeOverlay->clearMinutiae();
+        }
+        
+        // Limpar FragmentManager ANTES de fechar projeto
+        if (fragmentManager) {
+            fragmentManager->setProject(nullptr);
+        }
+        
+        // Fechar projeto anterior
+        PM::instance().closeProject();
+        
+        statusLabel->setText("Projeto anterior fechado");
+        updateWindowTitle();
+    }
+
     FingerprintEnhancer::NewProjectDialog dialog(this);
     if (dialog.exec() == QDialog::Accepted) {
         QString name = dialog.getProjectName();
         QString caseNumber = dialog.getCaseNumber();
 
-        if (PM::instance().createNewProject(name, caseNumber)) {
+        // WORKAROUND: ProjectManager::closeProject() tem um bug que não limpa o estado interno
+        // Tentamos fechar múltiplas vezes, e se falhar, usamos hack com openProject()
+        
+        // Tentar fechar múltiplas vezes
+        int closeAttempts = 5;
+        for (int i = 0; i < closeAttempts && PM::instance().hasOpenProject(); i++) {
+            PM::instance().closeProject();
+        }
+        
+        bool projectCreated = false;
+        
+        // Se AINDA houver projeto aberto, usar hack: openProject() em arquivo vazio força reset
+        if (PM::instance().hasOpenProject()) {
+            // Criar arquivo temporário vazio
+            QString tempFile = QDir::temp().filePath("__reset_project__.fpe");
+            QFile file(tempFile);
+            if (file.open(QIODevice::WriteOnly)) {
+                QJsonObject emptyProject;
+                emptyProject["version"] = "1.0";
+                emptyProject["name"] = "";
+                emptyProject["images"] = QJsonArray();
+                emptyProject["fragments"] = QJsonArray();
+                
+                QJsonDocument doc(emptyProject);
+                file.write(doc.toJson());
+                file.close();
+                
+                // Hack: openProject() fecha o anterior automaticamente
+                PM::instance().openProject(tempFile);
+                PM::instance().closeProject();
+                QFile::remove(tempFile);
+            }
+        }
+        
+        // Tentar criar projeto
+        projectCreated = PM::instance().createNewProject(name, caseNumber);
+        
+        if (projectCreated) {
             fragmentManager->setProject(PM::instance().getCurrentProject());
-            statusLabel->setText("Projeto criado: " + name);
+            statusLabel->setText("✅ Novo projeto criado: " + name);
             updateWindowTitle();
         } else {
-            QMessageBox::warning(this, "Erro", "Não foi possível criar o projeto");
+            QMessageBox::critical(this, "Erro ao Criar Projeto", 
+                QString("Não foi possível criar o projeto.\n\n"
+                        "Solução: Feche a aplicação e abra novamente."));
         }
     }
 }
@@ -739,13 +875,66 @@ void MainWindow::newProject() {
 void MainWindow::openProject() {
     using PM = FingerprintEnhancer::ProjectManager;
 
+    // Verificar se há projeto aberto
+    if (PM::instance().hasOpenProject()) {
+        FingerprintEnhancer::Project* currentProj = PM::instance().getCurrentProject();
+        
+        // Perguntar sobre salvar SOMENTE se projeto foi modificado
+        if (currentProj && currentProj->modified) {
+            int result = QMessageBox::question(
+                this,
+                "Salvar Projeto Atual?",
+                "O projeto atual possui alterações não salvas.\n"
+                "Deseja salvar antes de abrir outro projeto?",
+                QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel,
+                QMessageBox::Yes
+            );
+            
+            if (result == QMessageBox::Cancel) {
+                return;  // Cancelar abertura de novo projeto
+            }
+            
+            if (result == QMessageBox::Yes) {
+                saveProject();  // Salvar projeto atual
+            }
+        }
+        
+        // SEMPRE limpar visualizações e fechar projeto anterior (modificado OU NÃO)
+        currentEntityType = ENTITY_NONE;
+        currentEntityId.clear();
+        
+        // Limpar viewers
+        if (processedImageViewer) {
+            processedImageViewer->clearImage();
+        }
+        if (secondImageViewer) {
+            secondImageViewer->clearImage();
+        }
+        
+        // Limpar overlays
+        if (leftMinutiaeOverlay) {
+            leftMinutiaeOverlay->clearMinutiae();
+        }
+        if (rightMinutiaeOverlay) {
+            rightMinutiaeOverlay->clearMinutiae();
+        }
+        
+        // Limpar FragmentManager
+        if (fragmentManager) {
+            fragmentManager->setProject(nullptr);
+        }
+        
+        // SEMPRE fechar projeto anterior (modificado ou não)
+        PM::instance().closeProject();
+    }
+
     QString fileName = QFileDialog::getOpenFileName(this,
         "Abrir Projeto", "", "Projeto FingerprintEnhancer (*.fpe)");
 
     if (!fileName.isEmpty()) {
         if (PM::instance().openProject(fileName)) {
             fragmentManager->setProject(PM::instance().getCurrentProject());
-            statusLabel->setText("Projeto aberto: " + QFileInfo(fileName).fileName());
+            statusLabel->setText("✅ Projeto aberto: " + QFileInfo(fileName).fileName());
             updateWindowTitle();
         } else {
             QMessageBox::warning(this, "Erro", "Falha ao abrir o projeto");
@@ -1355,6 +1544,25 @@ void MainWindow::adjustBrightnessContrast() {
     statusLabel->setText("Brilho/Contraste ajustados");
 }
 
+void MainWindow::applyBrightnessContrast() {
+    // Aplicar valores dos sliders de brilho e contraste
+    int brightness = brightnessSlider->value();  // -100 a 100
+    int contrast = contrastSlider->value();       // 50 a 300
+    
+    applyOperationToCurrentEntity([brightness, contrast](cv::Mat& img) {
+        // Converter contraste de 50-300 para 0.5-3.0 (alpha)
+        double alpha = contrast / 100.0;
+        // Brightness já está em -100 a 100 (beta)
+        double beta = static_cast<double>(brightness);
+        
+        img.convertTo(img, -1, alpha, beta);
+    });
+    
+    statusLabel->setText(QString("✅ Brilho: %1 | Contraste: %2% aplicados")
+                        .arg(brightness)
+                        .arg(contrast));
+}
+
 void MainWindow::equalizeHistogram() {
     applyOperationToCurrentEntity([](cv::Mat& img) {
         if (img.channels() == 1) {
@@ -1736,7 +1944,6 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                 if (viewer->hasCropSelection()) {
                     menu.addAction("✓ Aplicar Recorte", this, &MainWindow::applyCrop);
                     menu.addAction("Ajustar Seleção", this, &MainWindow::onCropAdjust);
-                    menu.addAction("Mover Seleção", this, &MainWindow::onCropMove);
                     menu.addSeparator();
                     menu.addAction("✗ Cancelar Recorte", this, &MainWindow::cancelCropSelection);
                 } else {
@@ -2215,39 +2422,61 @@ void MainWindow::rotateCustomAngle() {
 
     // Usar visualizador do painel ativo
     ImageViewer* activeViewer = getActiveViewer();
-
-    // Criar diálogo de rotação em tempo real
-    RotationDialog dialog(workingImg, activeViewer, this);
-    int result = dialog.exec();
-
-    if (result == QDialog::Accepted && dialog.wasAccepted()) {
-        double angle = dialog.getRotationAngle();
-        cv::Mat rotated = dialog.getRotatedImage();
-
-        // Se for fragmento, atualizar minúcias
-        if (currentEntityType == ENTITY_FRAGMENT) {
-            FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
-            if (frag) {
-                cv::Size oldSize = workingImg.size();
-                cv::Size newSize = rotated.size();
-                rotated.copyTo(frag->workingImage);
-                frag->rotateMinutiae(angle, oldSize, newSize);
-            }
-        } else {
-            // Aplicar diretamente na workingImage da entidade corrente
-            rotated.copyTo(workingImg);
-        }
-
-        // Recarregar visualização
-        loadCurrentEntityToView();
-
-        statusLabel->setText(QString("Imagem rotacionada %1°").arg(angle, 0, 'f', 1));
-
-        // Marcar como modificado
-        PM::instance().getCurrentProject()->setModified();
-    } else {
-        statusLabel->setText("Rotação cancelada");
+    
+    // Pegar fragmento e overlay se estiver rotacionando um fragmento
+    FingerprintEnhancer::Fragment* currentFrag = nullptr;
+    FingerprintEnhancer::MinutiaeOverlay* activeOverlay = nullptr;
+    
+    if (currentEntityType == ENTITY_FRAGMENT) {
+        currentFrag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        activeOverlay = getActiveOverlay();
     }
+
+    // Criar diálogo de rotação em tempo real (não-modal para permitir zoom/scroll)
+    // Passar fragmento e overlay para rotação em tempo real das minúcias
+    RotationDialog* dialog = new RotationDialog(workingImg, activeViewer, currentFrag, activeOverlay, this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    
+    // Conectar sinal de aceitação
+    connect(dialog, &QDialog::accepted, this, [this, dialog]() {
+        if (dialog->wasAccepted()) {
+            double angle = dialog->getRotationAngle();
+            cv::Mat rotated = dialog->getRotatedImage();
+
+            cv::Mat& workingImg = getCurrentWorkingImage();
+
+            // Aplicar imagem rotacionada
+            // IMPORTANTE: As minúcias já foram rotacionadas em tempo real pelo dialog!
+            // Não rotacionar novamente aqui
+            if (currentEntityType == ENTITY_FRAGMENT) {
+                FingerprintEnhancer::Fragment* frag = FingerprintEnhancer::ProjectManager::instance().getCurrentProject()->findFragment(currentEntityId);
+                if (frag) {
+                    rotated.copyTo(frag->workingImage);
+                    // Minúcias já foram rotacionadas em tempo real, não fazer nada aqui
+                }
+            } else {
+                // Aplicar diretamente na workingImage da entidade corrente
+                rotated.copyTo(workingImg);
+            }
+
+            // Recarregar visualização
+            loadCurrentEntityToView();
+
+            statusLabel->setText(QString("✅ Imagem rotacionada %1°").arg(angle, 0, 'f', 1));
+
+            // Marcar como modificado
+            FingerprintEnhancer::ProjectManager::instance().getCurrentProject()->setModified();
+        }
+    });
+    
+    // Conectar sinal de rejeição
+    connect(dialog, &QDialog::rejected, this, [this]() {
+        statusLabel->setText("❌ Rotação cancelada");
+    });
+    
+    // Mostrar dialog não-modal
+    dialog->show();
+    statusLabel->setText("🔄 Modo de Rotação Interativa - Ajuste o ângulo e use zoom/scroll livremente");
 }
 
 // ==================== CALIBRAÇÃO DE ESCALA ====================
@@ -2663,7 +2892,6 @@ void MainWindow::showContextMenu(const QPoint &pos) {
             if (processedImageViewer->hasCropSelection()) {
                 contextMenu.addAction("✓ Aplicar Recorte", this, &MainWindow::applyCrop);
                 contextMenu.addAction("Ajustar Seleção", this, &MainWindow::onCropAdjust);
-                contextMenu.addAction("Mover Seleção", this, &MainWindow::onCropMove);
                 contextMenu.addSeparator();
                 contextMenu.addAction("✗ Cancelar Recorte", this, &MainWindow::cancelCropSelection);
             } else {
@@ -3175,6 +3403,10 @@ void MainWindow::setToolMode(ToolMode mode) {
     leftMinutiaeOverlay->setEditMode(false);
     rightMinutiaeOverlay->setEditMode(false);
     
+    // Tornar overlays visíveis (exceto no modo crop onde serão escondidos)
+    leftMinutiaeOverlay->setVisible(true);
+    rightMinutiaeOverlay->setVisible(true);
+    
     // Desativar calibração se ativa
     if (mode != MODE_CALIBRATE_SCALE) {
         deactivateScaleCalibrationMode();
@@ -3197,6 +3429,14 @@ void MainWindow::setToolMode(ToolMode mode) {
 
         case MODE_CROP:
             activeViewer->setCropMode(true);
+            // Desabilitar overlay completamente no modo crop
+            if (activeOverlay) {
+                fprintf(stderr, "[MainWindow] ESCONDENDO overlay no modo crop\n");
+                fflush(stderr);
+                activeOverlay->setVisible(false);
+                activeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+                activeOverlay->lower();  // Colocar overlay atrás
+            }
             statusLabel->setText("Ferramenta: Recortar - Clique e arraste para selecionar área");
             break;
 
@@ -3283,52 +3523,8 @@ void MainWindow::onCropAdjust() {
 }
 
 void MainWindow::onCropMove() {
-    ImageViewer* activeViewer = getActiveViewer();
-
-    if (!activeViewer->hasCropSelection()) {
-        QMessageBox::information(this, "Info", "Nenhuma seleção de recorte ativa");
-        return;
-    }
-
-    QRect currentSelection = activeViewer->getCropSelection();
-
-    // Dialog para mover a seleção
-    QDialog dialog(this);
-    dialog.setWindowTitle("Mover Seleção de Recorte");
-    QFormLayout* layout = new QFormLayout(&dialog);
-
-    QSpinBox* deltaXSpinBox = new QSpinBox();
-    deltaXSpinBox->setRange(-10000, 10000);
-    deltaXSpinBox->setValue(0);
-    deltaXSpinBox->setSuffix(" px");
-    layout->addRow("Deslocamento X:", deltaXSpinBox);
-
-    QSpinBox* deltaYSpinBox = new QSpinBox();
-    deltaYSpinBox->setRange(-10000, 10000);
-    deltaYSpinBox->setValue(0);
-    deltaYSpinBox->setSuffix(" px");
-    layout->addRow("Deslocamento Y:", deltaYSpinBox);
-
-    QLabel* info = new QLabel(QString("Posição atual: (%1, %2)\nTamanho: %3x%4")
-        .arg(currentSelection.x()).arg(currentSelection.y())
-        .arg(currentSelection.width()).arg(currentSelection.height()));
-    layout->addRow(info);
-
-    QDialogButtonBox* buttonBox = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(buttonBox, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    connect(buttonBox, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-    layout->addRow(buttonBox);
-
-    if (dialog.exec() == QDialog::Accepted) {
-        QRect newSelection = currentSelection.translated(
-            deltaXSpinBox->value(),
-            deltaYSpinBox->value()
-        );
-        activeViewer->setCropSelection(newSelection);
-        statusLabel->setText(QString("Seleção movida para (%1,%2)")
-            .arg(newSelection.x()).arg(newSelection.y()));
-    }
+    // Função não mais usada - movimento agora é feito clicando e arrastando dentro da seleção
+    return;
 }
 
 void MainWindow::createFragmentFromWholeImage() {

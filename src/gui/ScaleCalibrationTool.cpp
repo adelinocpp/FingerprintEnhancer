@@ -1,6 +1,7 @@
 #include "ScaleCalibrationTool.h"
 #include <QPainter>
 #include <QKeyEvent>
+#include <QWheelEvent>
 #include <QFontMetrics>
 #include <QApplication>
 #include <cmath>
@@ -135,8 +136,28 @@ void ScaleCalibrationTool::paintEvent(QPaintEvent *event)
     }
 }
 
+void ScaleCalibrationTool::wheelEvent(QWheelEvent *event)
+{
+    // SEMPRE passar eventos de scroll do mouse para o parent (ImageViewer)
+    // para permitir zoom durante calibração
+    if (parentWidget()) {
+        QApplication::sendEvent(parentWidget(), event);
+    }
+    event->accept();
+}
+
 void ScaleCalibrationTool::mousePressEvent(QMouseEvent *event)
 {
+    // Permitir scroll com botão do meio ou Ctrl+Left
+    if (event->button() == Qt::MiddleButton || 
+        (event->button() == Qt::LeftButton && event->modifiers() & Qt::ControlModifier)) {
+        // Passar para o parent para permitir pan/scroll
+        if (parentWidget()) {
+            QApplication::sendEvent(parentWidget(), event);
+        }
+        return;
+    }
+    
     if (!active || event->button() != Qt::LeftButton) {
         QWidget::mousePressEvent(event);
         return;
@@ -168,6 +189,15 @@ void ScaleCalibrationTool::mousePressEvent(QMouseEvent *event)
 
 void ScaleCalibrationTool::mouseMoveEvent(QMouseEvent *event)
 {
+    // Se estiver com botão do meio pressionado, passar para parent (pan)
+    if (event->buttons() & Qt::MiddleButton || 
+        ((event->buttons() & Qt::LeftButton) && (event->modifiers() & Qt::ControlModifier))) {
+        if (parentWidget()) {
+            QApplication::sendEvent(parentWidget(), event);
+        }
+        return;
+    }
+    
     if (!active) {
         QWidget::mouseMoveEvent(event);
         return;
@@ -183,6 +213,14 @@ void ScaleCalibrationTool::mouseMoveEvent(QMouseEvent *event)
 
 void ScaleCalibrationTool::mouseReleaseEvent(QMouseEvent *event)
 {
+    // Passar eventos de botão do meio para o parent
+    if (event->button() == Qt::MiddleButton) {
+        if (parentWidget()) {
+            QApplication::sendEvent(parentWidget(), event);
+        }
+        return;
+    }
+    
     if (!active || event->button() != Qt::LeftButton) {
         QWidget::mouseReleaseEvent(event);
         return;
@@ -520,13 +558,6 @@ double ScaleCalibrationTool::estimateConfidence() const
     }
     
     return std::min(100.0, confidence);
-}
-
-void ScaleCalibrationTool::wheelEvent(QWheelEvent *event)
-{
-    // Não processar o evento aqui - deixar passar para o parent
-    // Isso permite que o ImageViewer processe o zoom
-    event->ignore();
 }
 
 void ScaleCalibrationTool::contextMenuEvent(QContextMenuEvent *event)

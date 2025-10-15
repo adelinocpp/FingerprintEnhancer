@@ -109,6 +109,7 @@ private slots:
     void applyGaussianBlur();
     void applySharpenFilter();
     void adjustBrightnessContrast();
+    void applyBrightnessContrast();  // Aplica valores dos sliders
     void equalizeHistogram();
     void applyCLAHE();
     void invertColors();

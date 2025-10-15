@@ -106,6 +106,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     void onSyncViewportChanged(QPoint position);
@@ -131,9 +132,21 @@ private:
     // Modo de recorte
     bool cropModeEnabled;
     bool isSelecting;
+    bool isMovingSelection;  // Movendo seleção inteira (clicou dentro e está arrastando)
+    bool isResizingEdge;     // Redimensionando borda específica
     QPoint cropStart;
     QPoint cropEnd;
     QRect cropSelection;
+    
+    // Estados de redimensionamento
+    enum EdgeHandle {
+        EDGE_NONE,
+        EDGE_TOP,
+        EDGE_BOTTOM,
+        EDGE_LEFT,
+        EDGE_RIGHT
+    };
+    EdgeHandle activeEdgeHandle;
     
     // Métodos auxiliares
     void updateImageDisplay();
@@ -141,6 +154,10 @@ private:
     QPixmap matToQPixmap(const cv::Mat &mat);
     void adjustScrollBars(double factor);
     void centerImage();
+    
+    // Detecção de handles de redimensionamento
+    EdgeHandle getEdgeHandleAtPoint(const QPoint &widgetPos) const;
+    bool isPointInDiamondHandle(const QPoint &widgetPos, const QPoint &handleCenter, int size) const;
     
     // Constantes
     static const double MIN_ZOOM_FACTOR;

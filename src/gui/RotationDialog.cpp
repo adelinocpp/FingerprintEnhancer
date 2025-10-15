@@ -1,13 +1,33 @@
 #include "RotationDialog.h"
 #include "ImageViewer.h"
+#include "MinutiaeOverlay.h"
+#include "../core/ProjectModel.h"
 #include <QGroupBox>
 
-RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer, QWidget *parent)
-    : QDialog(parent), originalImage(image.clone()), imageViewer(viewer),
-      finalAngle(0.0), accepted(false), useTransparentBackground(false) {
+RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer, 
+                               FingerprintEnhancer::Fragment *fragment,
+                               FingerprintEnhancer::MinutiaeOverlay *overlay,
+                               QWidget *parent)
+    : QDialog(parent), 
+      originalImage(image.clone()), 
+      imageViewer(viewer),
+      currentFragment(fragment),
+      minutiaeOverlay(overlay),
+      finalAngle(0.0), 
+      accepted(false), 
+      useTransparentBackground(false) {
 
-    setWindowTitle("Rotacionar Imagem");
+    setWindowTitle("Rotacionar Imagem - Interativo");
     setMinimumSize(400, 250);
+    
+    // Tornar não-modal para permitir interação com viewer (zoom/scroll)
+    setModal(false);
+    setWindowFlags(windowFlags() | Qt::WindowStaysOnTopHint);
+    
+    // Se há fragmento, guardar minúcias originais para restaurar no cancelamento
+    if (currentFragment && !currentFragment->minutiae.isEmpty()) {
+        originalMinutiae = currentFragment->minutiae;
+    }
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
@@ -106,6 +126,22 @@ void RotationDialog::updatePreview(double angle) {
     if (imageViewer) {
         imageViewer->setImage(rotatedImage);
     }
+    
+    // Rotacionar minúcias em tempo real se houver fragmento
+    if (currentFragment && !originalMinutiae.isEmpty()) {
+        // Restaurar minúcias originais primeiro
+        currentFragment->minutiae = originalMinutiae;
+        
+        // Aplicar rotação temporária
+        cv::Size oldSize = originalImage.size();
+        cv::Size newSize = rotatedImage.size();
+        currentFragment->rotateMinutiae(angle, oldSize, newSize);
+        
+        // Atualizar overlay visual
+        if (minutiaeOverlay) {
+            minutiaeOverlay->update();
+        }
+    }
 }
 
 cv::Mat RotationDialog::rotateImage(const cv::Mat &image, double angle) {
@@ -159,9 +195,21 @@ void RotationDialog::onAccept() {
 
 void RotationDialog::onReject() {
     accepted = false;
+    
     // Restaurar imagem original no viewer
     if (imageViewer) {
         imageViewer->setImage(originalImage);
     }
+    
+    // Restaurar minúcias originais se houver fragmento
+    if (currentFragment && !originalMinutiae.isEmpty()) {
+        currentFragment->minutiae = originalMinutiae;
+        
+        // Atualizar overlay visual
+        if (minutiaeOverlay) {
+            minutiaeOverlay->update();
+        }
+    }
+    
     reject();
 }

@@ -1,0 +1,67 @@
+==========================================
+TESTE: Message handler instalado!
+==========================================
+[INFO] 🧪 TESTE: qInfo() funcionando!
+[INFO] Starting FingerprintEnhancer v "1.0.0"
+[INFO] Built with Qt 6.2.4 and OpenCV 4.5.4
+[INFO] OpenCV version: 4.5.4
+[INFO] Qt version: 6.2.4
+Initialized 12 translations for English
+Language set to: pt_BR
+[INFO] Translation system initialized with language: pt_BR
+[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!
+[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!
+[INFO] Application started successfully
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[ImageViewer] setCropMode(FALSE)
+[ImageViewer] setCropMode(FALSE)
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[ImageViewer] setCropMode(TRUE)
+[MainWindow] ESCONDENDO overlay no modo crop
+
+=== mousePressEvent ===
+event->pos: (527, 189)
+imagePos: (1458, 473)
+cropSelection: (0, 0, 0, 0)
+cropMode ATIVO
+handle: 0
+cropSelection.contains(imagePos): FALSE
+
+=== mousePressEvent ===
+event->pos: (670, 535)
+imagePos: (1853, 1430)
+cropSelection: (1458, 473, 856, 1354)
+cropMode ATIVO
+handle: 0
+cropSelection.contains(imagePos): TRUE
+-> MOVER SELEÇÃO INTEIRA
+
+=== mousePressEvent ===
+event->pos: (520, 441)
+imagePos: (1438, 1170)
+cropSelection: (1433, 506, 856, 1354)
+cropMode ATIVO
+handle: 3
+-> REDIMENSIONAR BORDA
+
+=== mousePressEvent ===
+
+=== mousePressEvent ===
+event->pos: (636, 464)
+imagePos: (1759, 1234)
+cropSelection: (1455, 506, 834, 1354)
+cropMode ATIVO
+handle: 0
+cropSelection.contains(imagePos): TRUE
+-> MOVER SELEÇÃO INTEIRA
+
+=== mousePressEvent ===
+[ImageViewer] setCropMode(FALSE)
+[ImageViewer] setCropMode(FALSE)
+[ImageViewer] setCropMode(FALSE)
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[INFO] Application finished with code: 0

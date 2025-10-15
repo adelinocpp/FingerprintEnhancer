@@ -13,11 +13,20 @@
 
 class ImageViewer;
 
+namespace FingerprintEnhancer {
+    struct Fragment;
+    class MinutiaeOverlay;
+    struct Minutia;
+}
+
 class RotationDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit RotationDialog(const cv::Mat &image, ImageViewer *viewer, QWidget *parent = nullptr);
+    explicit RotationDialog(const cv::Mat &image, ImageViewer *viewer, 
+                           FingerprintEnhancer::Fragment *fragment = nullptr,
+                           FingerprintEnhancer::MinutiaeOverlay *overlay = nullptr,
+                           QWidget *parent = nullptr);
     ~RotationDialog();
 
     double getRotationAngle() const { return finalAngle; }
@@ -37,10 +46,15 @@ private:
     cv::Mat originalImage;
     cv::Mat rotatedImage;
     ImageViewer *imageViewer;
+    FingerprintEnhancer::Fragment *currentFragment;
+    FingerprintEnhancer::MinutiaeOverlay *minutiaeOverlay;
 
     double finalAngle;
     bool accepted;
     bool useTransparentBackground;
+    
+    // Backup das minúcias originais para restaurar no cancelamento
+    QList<FingerprintEnhancer::Minutia> originalMinutiae;
 
     QSlider *angleSlider;
     QDoubleSpinBox *angleSpinBox;
