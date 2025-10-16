@@ -2373,6 +2373,8 @@ void MainWindow::applyCrop() {
     }
 
     FingerprintEnhancer::Fragment newFragment(parentImageId, selection, croppedImage);
+    // Salvar o ângulo de rotação atual da imagem no momento de criação do fragmento
+    newFragment.sourceRotationAngle = img->currentRotationAngle;
     img->fragments.append(newFragment);
     PM::instance().getCurrentProject()->setModified();
 
@@ -2488,6 +2490,21 @@ void MainWindow::rotateRight90() {
             frag->rotateMinutiae(-90.0, oldSize, newSize); // -90 porque OpenCV rotaciona no sentido horário
             loadCurrentEntityToView();
         }
+    } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
+        // Rotacionar IMAGEM - atualizar ângulo e fragmentos
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (img) {
+            // Rotacionar imagem
+            cv::rotate(img->workingImage, img->workingImage, cv::ROTATE_90_CLOCKWISE);
+            // Incrementar ângulo da imagem
+            img->currentRotationAngle = fmod(img->currentRotationAngle + 90.0, 360.0);
+            // Atualizar ângulo de todos os fragmentos
+            for (auto& frag : img->fragments) {
+                frag.sourceRotationAngle = fmod(frag.sourceRotationAngle + 90.0, 360.0);
+            }
+            loadCurrentEntityToView();
+            PM::instance().getCurrentProject()->setModified();
+        }
     } else {
         applyOperationToCurrentEntity([](cv::Mat& img) {
             cv::rotate(img, img, cv::ROTATE_90_CLOCKWISE);
@@ -2508,6 +2525,21 @@ void MainWindow::rotateLeft90() {
             frag->rotateMinutiae(90.0, oldSize, newSize);
             loadCurrentEntityToView();
         }
+    } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
+        // Rotacionar IMAGEM - atualizar ângulo e fragmentos
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (img) {
+            // Rotacionar imagem
+            cv::rotate(img->workingImage, img->workingImage, cv::ROTATE_90_COUNTERCLOCKWISE);
+            // Decrementar ângulo da imagem
+            img->currentRotationAngle = fmod(img->currentRotationAngle - 90.0 + 360.0, 360.0);
+            // Atualizar ângulo de todos os fragmentos
+            for (auto& frag : img->fragments) {
+                frag.sourceRotationAngle = fmod(frag.sourceRotationAngle - 90.0 + 360.0, 360.0);
+            }
+            loadCurrentEntityToView();
+            PM::instance().getCurrentProject()->setModified();
+        }
     } else {
         applyOperationToCurrentEntity([](cv::Mat& img) {
             cv::rotate(img, img, cv::ROTATE_90_COUNTERCLOCKWISE);
@@ -2527,6 +2559,21 @@ void MainWindow::rotate180() {
             cv::Size newSize = frag->workingImage.size();
             frag->rotateMinutiae(180.0, oldSize, newSize);
             loadCurrentEntityToView();
+        }
+    } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
+        // Rotacionar IMAGEM - atualizar ângulo e fragmentos
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (img) {
+            // Rotacionar imagem
+            cv::rotate(img->workingImage, img->workingImage, cv::ROTATE_180);
+            // Incrementar ângulo da imagem
+            img->currentRotationAngle = fmod(img->currentRotationAngle + 180.0, 360.0);
+            // Atualizar ângulo de todos os fragmentos
+            for (auto& frag : img->fragments) {
+                frag.sourceRotationAngle = fmod(frag.sourceRotationAngle + 180.0, 360.0);
+            }
+            loadCurrentEntityToView();
+            PM::instance().getCurrentProject()->setModified();
         }
     } else {
         applyOperationToCurrentEntity([](cv::Mat& img) {
@@ -3769,6 +3816,7 @@ void MainWindow::loadCurrentEntityToView() {
     // Usar visualizador e overlay do painel ativo
     ImageViewer* activeViewer = getActiveViewer();
     FingerprintEnhancer::MinutiaeOverlay* activeOverlay = getActiveOverlay();
+    FragmentRegionsOverlay* activeFragmentOverlay = activePanel ? rightFragmentRegionsOverlay : leftFragmentRegionsOverlay;
 
     if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
         activeViewer->clearImage();
@@ -3827,6 +3875,25 @@ void MainWindow::loadCurrentEntityToView() {
         activeOverlay->update();
     } else {
         activeOverlay->setFragment(nullptr);
+    }
+    
+    // Configurar fragment regions overlay se for imagem
+    if (currentEntityType == ENTITY_IMAGE) {
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (img) {
+            activeFragmentOverlay->setImage(img);
+            activeFragmentOverlay->setScaleFactor(activeViewer->getScaleFactor());
+            
+            // Inicializar offsets
+            QPoint scrollOffset(activeViewer->horizontalScrollBar()->value(),
+                               activeViewer->verticalScrollBar()->value());
+            activeFragmentOverlay->setScrollOffset(scrollOffset);
+            activeFragmentOverlay->setImageOffset(activeViewer->getImageOffset());
+            activeFragmentOverlay->update();
+        }
+    } else {
+        activeFragmentOverlay->setImage(nullptr);
+        activeFragmentOverlay->update();
     }
     
     // Aplicar ajuste ao tamanho do painel

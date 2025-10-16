@@ -16,7 +16,6 @@ Language set to: pt_BR
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[WARNING] WARNING Qt AtSpiAdaptor: Accessible invalid:  QAccessibleInterface(0x55aedb7d6f90 invalid) "/org/a11y/atspi/accessible/2147483773"
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
@@ -42,7 +41,3 @@ Language set to: pt_BR
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[INFO] Application finished with code: 0

@@ -39,6 +39,8 @@ private:
     bool showRegions;
     
     void drawFragmentRegion(QPainter& painter, const FingerprintEnhancer::Fragment* fragment, int index);
+    void drawRectAndLabel(QPainter& painter, const QRectF& rect, int index);
+    void drawLabel(QPainter& painter, const QPointF& pos, int index);
 };
 
 #endif // FRAGMENTREGIONSOVERLAY_H
