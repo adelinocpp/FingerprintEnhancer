@@ -14,6 +14,7 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include "ImagePropertiesDialog.h"
 #include "FragmentPropertiesDialog.h"
 #include "FragmentRegionsOverlay.h"
+#include "FragmentComparisonDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -3589,9 +3590,11 @@ void MainWindow::identifyFingerprint() {
 }
 
 void MainWindow::verifyFingerprint() {
-    QMessageBox::information(this, "AFIS",
-        "Função de verificação 1:1 em desenvolvimento.\n"
-        "Esta função comparará duas impressões digitais específicas.");
+    // Abrir dialog de comparação 1:1 de fragmentos
+    FragmentComparisonDialog* dialog = new FragmentComparisonDialog(this);
+    dialog->setProject(PM::instance().getCurrentProject());
+    dialog->exec();
+    dialog->deleteLater();
 }
 
 void MainWindow::configureAFISMatching() {

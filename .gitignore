@@ -176,3 +176,10 @@ INSTALL.md
 Makefile
 TESTE_COMPLETO_RESULTADO.md
 .sync.ffs_db
+
+# Ignora todos os arquivos .md
+*.md
+
+# Exceto o readme.md (ajuste o nome se necessário)
+!README.md
+!readme.md
