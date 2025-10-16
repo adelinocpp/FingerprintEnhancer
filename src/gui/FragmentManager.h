@@ -64,6 +64,8 @@ signals:
     
     void editImagePropertiesRequested(const QString& imageId);
     void editFragmentPropertiesRequested(const QString& fragmentId);
+    
+    void toggleFragmentRegionsRequested();
 
 private slots:
     void onTreeItemSelectionChanged();

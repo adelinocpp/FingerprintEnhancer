@@ -10,6 +10,7 @@
 #include <QtGui/QMouseEvent>
 #include <QtCore/QEvent>
 #include <QtCore/QDebug>
+#include <QtCore/QSettings>
 
 // ==================== CropOverlayLabel ====================
 
@@ -284,32 +285,16 @@ void ImageViewer::wheelEvent(QWheelEvent *event) {
 }
 
 void ImageViewer::mousePressEvent(QMouseEvent *event) {
-    fprintf(stderr, "\n=== mousePressEvent ===\n");
-    fflush(stderr);
-    
     if (event->button() == Qt::LeftButton) {
         QPoint imagePos = widgetToImage(event->pos());
         QPoint labelPos = imageLabel->mapFromGlobal(viewport()->mapToGlobal(event->pos()));
-        
-        fprintf(stderr, "event->pos: (%d, %d)\n", event->pos().x(), event->pos().y());
-        fprintf(stderr, "imagePos: (%d, %d)\n", imagePos.x(), imagePos.y());
-        fprintf(stderr, "cropSelection: (%d, %d, %d, %d)\n", 
-                cropSelection.x(), cropSelection.y(), cropSelection.width(), cropSelection.height());
-        fflush(stderr);
 
         if (cropModeEnabled) {
-            fprintf(stderr, "cropMode ATIVO\n");
-            fflush(stderr);
-            
             // 1. Verificar se clicou em losango (handle de redimensionamento)
             EdgeHandle handle = getEdgeHandleAtPoint(labelPos);
-            fprintf(stderr, "handle: %d\n", handle);
-            fflush(stderr);
             
             if (handle != EDGE_NONE && !cropSelection.isNull()) {
                 // Redimensionar borda específica
-                fprintf(stderr, "-> REDIMENSIONAR BORDA\n");
-                fflush(stderr);
                 isResizingEdge = true;
                 activeEdgeHandle = handle;
                 cropStart = imagePos;
@@ -318,14 +303,8 @@ void ImageViewer::mousePressEvent(QMouseEvent *event) {
             }
             
             // 2. Verificar se clicou DENTRO da seleção (mas não no losango)
-            bool dentro = cropSelection.contains(imagePos);
-            fprintf(stderr, "cropSelection.contains(imagePos): %s\n", dentro ? "TRUE" : "FALSE");
-            fflush(stderr);
-            
-            if (!cropSelection.isNull() && dentro) {
+            if (!cropSelection.isNull() && cropSelection.contains(imagePos)) {
                 // Mover seleção inteira
-                fprintf(stderr, "-> MOVER SELEÇÃO INTEIRA\n");
-                fflush(stderr);
                 isMovingSelection = true;
                 cropStart = imagePos;
                 setCursor(Qt::ClosedHandCursor);
@@ -542,8 +521,6 @@ void ImageViewer::centerImage() {
 // ==================== FUNÇÕES DE RECORTE ====================
 
 void ImageViewer::setCropMode(bool enabled) {
-    fprintf(stderr, "[ImageViewer] setCropMode(%s)\n", enabled ? "TRUE" : "FALSE");
-    fflush(stderr);
     cropModeEnabled = enabled;
     if (!enabled) {
         clearCropSelection();
@@ -579,6 +556,73 @@ void ImageViewer::clearCropSelection() {
     cropSelection = QRect();
     isSelecting = false;
     imageLabel->clearOverlay();
+}
+
+void ImageViewer::saveCropSelectionState(const QString& imageId) {
+    if (imageId.isEmpty()) {
+        return;
+    }
+    
+    QSettings settings("FingerprintEnhancer", "CropSelections");
+    settings.beginGroup(imageId);
+    
+    if (!cropSelection.isNull()) {
+        // Salvar seleção como array: [x, y, width, height]
+        settings.setValue("version", 1);  // Versão do formato
+        settings.setValue("hasCrop", true);
+        settings.setValue("x", cropSelection.x());
+        settings.setValue("y", cropSelection.y());
+        settings.setValue("width", cropSelection.width());
+        settings.setValue("height", cropSelection.height());
+    } else {
+        // Limpar seleção salva
+        settings.setValue("version", 1);
+        settings.setValue("hasCrop", false);
+    }
+    
+    settings.endGroup();
+    settings.sync();
+}
+
+void ImageViewer::restoreCropSelectionState(const QString& imageId) {
+    if (imageId.isEmpty()) {
+        return;
+    }
+    
+    QSettings settings("FingerprintEnhancer", "CropSelections");
+    settings.beginGroup(imageId);
+    
+    // Compatibilidade retroativa: se não existir "version", arquivo é de versão antiga
+    int version = settings.value("version", 0).toInt();
+    
+    if (version == 0) {
+        // Versão antiga (sem crop selection salva) - não fazer nada
+        settings.endGroup();
+        return;
+    }
+    
+    // Versão 1 ou superior
+    bool hasCrop = settings.value("hasCrop", false).toBool();
+    
+    if (hasCrop) {
+        int x = settings.value("x", 0).toInt();
+        int y = settings.value("y", 0).toInt();
+        int width = settings.value("width", 0).toInt();
+        int height = settings.value("height", 0).toInt();
+        
+        // Validar coordenadas
+        if (width > 0 && height > 0 && !currentImage.empty()) {
+            // Garantir que está dentro dos limites da imagem
+            if (x >= 0 && y >= 0 && 
+                x + width <= currentImage.cols && 
+                y + height <= currentImage.rows) {
+                cropSelection = QRect(x, y, width, height);
+                imageLabel->setOverlayRect(cropSelection);
+            }
+        }
+    }
+    
+    settings.endGroup();
 }
 
 void ImageViewer::onScrollBarValueChanged() {

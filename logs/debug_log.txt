@@ -14,53 +14,34 @@ Language set to: pt_BR
 [INFO] Application started successfully
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[ImageViewer] setCropMode(FALSE)
-[ImageViewer] setCropMode(FALSE)
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[ImageViewer] setCropMode(TRUE)
-[MainWindow] ESCONDENDO overlay no modo crop
-
-=== mousePressEvent ===
-event->pos: (527, 189)
-imagePos: (1458, 473)
-cropSelection: (0, 0, 0, 0)
-cropMode ATIVO
-handle: 0
-cropSelection.contains(imagePos): FALSE
-
-=== mousePressEvent ===
-event->pos: (670, 535)
-imagePos: (1853, 1430)
-cropSelection: (1458, 473, 856, 1354)
-cropMode ATIVO
-handle: 0
-cropSelection.contains(imagePos): TRUE
--> MOVER SELEÇÃO INTEIRA
-
-=== mousePressEvent ===
-event->pos: (520, 441)
-imagePos: (1438, 1170)
-cropSelection: (1433, 506, 856, 1354)
-cropMode ATIVO
-handle: 3
--> REDIMENSIONAR BORDA
-
-=== mousePressEvent ===
-
-=== mousePressEvent ===
-event->pos: (636, 464)
-imagePos: (1759, 1234)
-cropSelection: (1455, 506, 834, 1354)
-cropMode ATIVO
-handle: 0
-cropSelection.contains(imagePos): TRUE
--> MOVER SELEÇÃO INTEIRA
-
-=== mousePressEvent ===
-[ImageViewer] setCropMode(FALSE)
-[ImageViewer] setCropMode(FALSE)
-[ImageViewer] setCropMode(FALSE)
+[WARNING] WARNING Qt AtSpiAdaptor: Accessible invalid:  QAccessibleInterface(0x55aedb7d6f90 invalid) "/org/a11y/atspi/accessible/2147483773"
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse

@@ -42,6 +42,7 @@ Q_DECLARE_LOGGING_CATEGORY(mainwindow)
 #include "MinutiaeDisplayDialog.h"
 #include "ScaleCalibrationTool.h"
 #include "RulerWidget.h"
+#include "FragmentRegionsOverlay.h"
 #include "ImageLoaderWorker.h"
 #include "ProjectSaverWorker.h"
 #include "../afis/AFISMatcher.h"
@@ -178,6 +179,9 @@ private slots:
     void toggleShowMinutiaeLabels();
     void saveMinutiaeNumberedImage();
     void clearAllMinutiae();
+    
+    // Visualização de regiões de fragmentos
+    void toggleShowFragmentRegions();
 
     // Menu AFIS
     void loadAFISDatabase();
@@ -264,7 +268,7 @@ private slots:
     FingerprintEnhancer::MinutiaeOverlay* getActiveOverlay();
     void loadEntityToPanel(const QString& entityId, CurrentEntityType type, bool targetPanel);
     void updateActivePanelEntity();
-    QWidget* createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay);
+    QWidget* createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay, FragmentRegionsOverlay* fragmentOverlay);
     void clearActivePanel();
     void showViewerContextMenu(const QPoint& pos, bool isLeftPanel);
 
@@ -354,6 +358,10 @@ private:
     // Novos componentes do sistema de projetos
     FingerprintEnhancer::FragmentManager *fragmentManager;
     FingerprintEnhancer::MinutiaeOverlay *minutiaeOverlay;  // Deprecated - usar leftMinutiaeOverlay/rightMinutiaeOverlay
+    
+    // Overlays para mostrar regiões de fragmentos
+    class FragmentRegionsOverlay *leftFragmentRegionsOverlay;
+    class FragmentRegionsOverlay *rightFragmentRegionsOverlay;
 
     // Sistema de Entidade Corrente (para cada painel)
     CurrentEntityType currentEntityType;  // Tipo da entidade sendo exibida/editada no painel ativo

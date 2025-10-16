@@ -82,6 +82,10 @@ public:
     bool hasCropSelection() const { return !cropSelection.isNull(); }
     void setCropSelection(const QRect& rect);
     void clearCropSelection();
+    
+    // Salvar/Restaurar seleção de crop
+    void saveCropSelectionState(const QString& imageId);
+    void restoreCropSelectionState(const QString& imageId);
 
     // Acesso para CropOverlayLabel
     double getScaleFactor() const { return scaleFactor; }

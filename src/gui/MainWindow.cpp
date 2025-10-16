@@ -13,6 +13,7 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include "FragmentExportDialog.h"
 #include "ImagePropertiesDialog.h"
 #include "FragmentPropertiesDialog.h"
+#include "FragmentRegionsOverlay.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -337,7 +338,7 @@ void MainWindow::createStatusBar() {
     statusBar()->addPermanentWidget(progressBar);
 }
 
-QWidget* MainWindow::createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay) {
+QWidget* MainWindow::createViewerContainer(ImageViewer* viewer, FingerprintEnhancer::MinutiaeOverlay* overlay, FragmentRegionsOverlay* fragmentOverlay) {
     QWidget *container = new QWidget();
     QGridLayout *gridLayout = new QGridLayout(container);
     gridLayout->setSpacing(0);
@@ -363,18 +364,21 @@ QWidget* MainWindow::createViewerContainer(ImageViewer* viewer, FingerprintEnhan
     topRuler->setVisible(false);
     leftRuler->setVisible(false);
     
-    // Criar widget central com viewer e overlay empilhados
+    // Criar widget central com viewer e overlays empilhados
     QWidget *viewerWidget = new QWidget();
     QStackedLayout *stackedLayout = new QStackedLayout(viewerWidget);
     stackedLayout->setStackingMode(QStackedLayout::StackAll);
     stackedLayout->setContentsMargins(0, 0, 0, 0);
     
     stackedLayout->addWidget(viewer);
-    stackedLayout->addWidget(overlay);
+    stackedLayout->addWidget(fragmentOverlay);  // Fragment regions abaixo
+    stackedLayout->addWidget(overlay);          // Minutiae no topo
     
-    // Configurar overlay para ser transparente e passar eventos de mouse
+    // Configurar overlays para serem transparentes e passar eventos de mouse
     overlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     overlay->setStyleSheet("background-color: transparent;");
+    fragmentOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    fragmentOverlay->setStyleSheet("background-color: transparent;");
     
     // Adicionar ao grid layout
     // [0,0] = canto    [0,1] = régua topo
@@ -427,10 +431,14 @@ void MainWindow::createCentralWidget() {
     // Criar overlays para cada painel
     leftMinutiaeOverlay = new FingerprintEnhancer::MinutiaeOverlay(nullptr);
     rightMinutiaeOverlay = new FingerprintEnhancer::MinutiaeOverlay(nullptr);
+    
+    // Criar overlays para regiões de fragmentos
+    leftFragmentRegionsOverlay = new FragmentRegionsOverlay(nullptr);
+    rightFragmentRegionsOverlay = new FragmentRegionsOverlay(nullptr);
 
-    // Criar containers para cada visualizador com seu overlay
-    leftViewerContainer = createViewerContainer(processedImageViewer, leftMinutiaeOverlay);
-    rightViewerContainer = createViewerContainer(secondImageViewer, rightMinutiaeOverlay);
+    // Criar containers para cada visualizador com seus overlays
+    leftViewerContainer = createViewerContainer(processedImageViewer, leftMinutiaeOverlay, leftFragmentRegionsOverlay);
+    rightViewerContainer = createViewerContainer(secondImageViewer, rightMinutiaeOverlay, rightFragmentRegionsOverlay);
 
     // Manter referência ao overlay antigo para compatibilidade
     minutiaeOverlay = leftMinutiaeOverlay;
@@ -529,6 +537,12 @@ void MainWindow::createLeftPanel() {
     invertColorsButton->setToolTip("Inverter cores da imagem");
     adjustBrightnessContrastButton->setToolTip("Aplicar valores de brilho e contraste dos sliders acima");
     
+    // Conectar sinais dos botões diretamente
+    connect(adjustBrightnessContrastButton, &QPushButton::clicked, this, &MainWindow::applyBrightnessContrast);
+    connect(claheButton, &QPushButton::clicked, this, &MainWindow::applyCLAHE);
+    connect(toGrayscaleButton, &QPushButton::clicked, this, &MainWindow::convertToGrayscale);
+    connect(invertColorsButton, &QPushButton::clicked, this, &MainWindow::invertColors);
+    
     conversionLayout->addWidget(adjustBrightnessContrastButton);
     conversionLayout->addWidget(claheButton);
     conversionLayout->addWidget(toGrayscaleButton);
@@ -608,22 +622,6 @@ void MainWindow::connectSignals() {
     connect(skeletonizeButton, &QPushButton::clicked, this, &MainWindow::skeletonizeImage);
     connect(extractMinutiaeButton, &QPushButton::clicked, this, &MainWindow::extractMinutiae);
     connect(compareButton, &QPushButton::clicked, this, &MainWindow::compareMinutiae);
-    
-    // Conectar novos botões de conversão/ajuste (findChild para acessar botões)
-    QPushButton* claheBtn = findChild<QPushButton*>();
-    if (claheBtn && claheBtn->text() == "Aplicar CLAHE") {
-        connect(claheBtn, &QPushButton::clicked, this, &MainWindow::applyCLAHE);
-    }
-    QPushButton* toGrayscaleBtn = findChild<QPushButton*>();
-    for (auto btn : findChildren<QPushButton*>()) {
-        if (btn->text() == "Converter para Cinza") {
-            connect(btn, &QPushButton::clicked, this, &MainWindow::convertToGrayscale);
-        } else if (btn->text() == "Inverter Cores") {
-            connect(btn, &QPushButton::clicked, this, &MainWindow::invertColors);
-        } else if (btn->text() == "Ajustar Brilho e Contraste") {
-            connect(btn, &QPushButton::clicked, this, &MainWindow::applyBrightnessContrast);
-        }
-    }
     connect(chartButton, &QPushButton::clicked, this, &MainWindow::generateChart);
 
     // Configurar menus de contexto nos visualizadores
@@ -682,6 +680,8 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onEditImagePropertiesRequested);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::editFragmentPropertiesRequested,
             this, &MainWindow::onEditFragmentPropertiesRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::toggleFragmentRegionsRequested,
+            this, &MainWindow::toggleShowFragmentRegions);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::sendToLeftPanelRequested,
             [this](const QString& entityId, bool isFragment) {
                 CurrentEntityType type = isFragment ? ENTITY_FRAGMENT : ENTITY_IMAGE;
@@ -740,6 +740,36 @@ void MainWindow::connectSignals() {
             rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setScrollOffset);
     connect(secondImageViewer, &ImageViewer::imageOffsetChanged,
             rightMinutiaeOverlay, &FingerprintEnhancer::MinutiaeOverlay::setImageOffset);
+    
+    // Conectar sinais de crop selection para auto-save
+    connect(processedImageViewer, &ImageViewer::cropSelectionChanged,
+            this, [this]() {
+                if (!leftPanelEntityId.isEmpty()) {
+                    processedImageViewer->saveCropSelectionState(leftPanelEntityId);
+                }
+            });
+    connect(secondImageViewer, &ImageViewer::cropSelectionChanged,
+            this, [this]() {
+                if (!rightPanelEntityId.isEmpty()) {
+                    secondImageViewer->saveCropSelectionState(rightPanelEntityId);
+                }
+            });
+    
+    // Conectar sinais para fragment regions overlays do painel esquerdo
+    connect(processedImageViewer, &ImageViewer::zoomChanged,
+            leftFragmentRegionsOverlay, &FragmentRegionsOverlay::setScaleFactor);
+    connect(processedImageViewer, &ImageViewer::scrollChanged,
+            leftFragmentRegionsOverlay, &FragmentRegionsOverlay::setScrollOffset);
+    connect(processedImageViewer, &ImageViewer::imageOffsetChanged,
+            leftFragmentRegionsOverlay, &FragmentRegionsOverlay::setImageOffset);
+    
+    // Conectar sinais para fragment regions overlays do painel direito
+    connect(secondImageViewer, &ImageViewer::zoomChanged,
+            rightFragmentRegionsOverlay, &FragmentRegionsOverlay::setScaleFactor);
+    connect(secondImageViewer, &ImageViewer::scrollChanged,
+            rightFragmentRegionsOverlay, &FragmentRegionsOverlay::setScrollOffset);
+    connect(secondImageViewer, &ImageViewer::imageOffsetChanged,
+            rightFragmentRegionsOverlay, &FragmentRegionsOverlay::setImageOffset);
 }
 
 void MainWindow::updateWindowTitle() {
@@ -789,6 +819,10 @@ void MainWindow::newProject() {
         // SEMPRE limpar visualizações e fechar projeto (modificado OU NÃO)
         currentEntityType = ENTITY_NONE;
         currentEntityId.clear();
+        leftPanelEntityType = ENTITY_NONE;
+        leftPanelEntityId.clear();
+        rightPanelEntityType = ENTITY_NONE;
+        rightPanelEntityId.clear();
         
         // Limpar viewers
         if (processedImageViewer) {
@@ -798,12 +832,26 @@ void MainWindow::newProject() {
             secondImageViewer->clearImage();
         }
         
-        // Limpar overlays
+        // Limpar overlays de minúcias
         if (leftMinutiaeOverlay) {
             leftMinutiaeOverlay->clearMinutiae();
+            leftMinutiaeOverlay->setFragment(nullptr);
+            leftMinutiaeOverlay->update();
         }
         if (rightMinutiaeOverlay) {
             rightMinutiaeOverlay->clearMinutiae();
+            rightMinutiaeOverlay->setFragment(nullptr);
+            rightMinutiaeOverlay->update();
+        }
+        
+        // Limpar overlays de regiões de fragmentos
+        if (leftFragmentRegionsOverlay) {
+            leftFragmentRegionsOverlay->setImage(nullptr);
+            leftFragmentRegionsOverlay->update();
+        }
+        if (rightFragmentRegionsOverlay) {
+            rightFragmentRegionsOverlay->setImage(nullptr);
+            rightFragmentRegionsOverlay->update();
         }
         
         // Limpar FragmentManager ANTES de fechar projeto
@@ -902,6 +950,10 @@ void MainWindow::openProject() {
         // SEMPRE limpar visualizações e fechar projeto anterior (modificado OU NÃO)
         currentEntityType = ENTITY_NONE;
         currentEntityId.clear();
+        leftPanelEntityType = ENTITY_NONE;
+        leftPanelEntityId.clear();
+        rightPanelEntityType = ENTITY_NONE;
+        rightPanelEntityId.clear();
         
         // Limpar viewers
         if (processedImageViewer) {
@@ -911,12 +963,26 @@ void MainWindow::openProject() {
             secondImageViewer->clearImage();
         }
         
-        // Limpar overlays
+        // Limpar overlays de minúcias
         if (leftMinutiaeOverlay) {
             leftMinutiaeOverlay->clearMinutiae();
+            leftMinutiaeOverlay->setFragment(nullptr);
+            leftMinutiaeOverlay->update();
         }
         if (rightMinutiaeOverlay) {
             rightMinutiaeOverlay->clearMinutiae();
+            rightMinutiaeOverlay->setFragment(nullptr);
+            rightMinutiaeOverlay->update();
+        }
+        
+        // Limpar overlays de regiões de fragmentos
+        if (leftFragmentRegionsOverlay) {
+            leftFragmentRegionsOverlay->setImage(nullptr);
+            leftFragmentRegionsOverlay->update();
+        }
+        if (rightFragmentRegionsOverlay) {
+            rightFragmentRegionsOverlay->setImage(nullptr);
+            rightFragmentRegionsOverlay->update();
         }
         
         // Limpar FragmentManager
@@ -1173,16 +1239,44 @@ void MainWindow::clearProject() {
     );
 
     if (reply == QMessageBox::Yes) {
-        // Limpar visualizadores
-        processedImageViewer->clearImage();
-        secondImageViewer->clearImage();
-        minutiaeOverlay->setFragment(nullptr);
-        
         // Limpar variáveis de estado
         currentEntityType = ENTITY_NONE;
         currentEntityId.clear();
         currentImageId.clear();
         currentFragmentId.clear();
+        leftPanelEntityType = ENTITY_NONE;
+        leftPanelEntityId.clear();
+        rightPanelEntityType = ENTITY_NONE;
+        rightPanelEntityId.clear();
+        
+        // Limpar visualizadores
+        processedImageViewer->clearImage();
+        secondImageViewer->clearImage();
+        
+        // Limpar overlays de minúcias
+        if (leftMinutiaeOverlay) {
+            leftMinutiaeOverlay->clearMinutiae();
+            leftMinutiaeOverlay->setFragment(nullptr);
+            leftMinutiaeOverlay->update();
+        }
+        if (rightMinutiaeOverlay) {
+            rightMinutiaeOverlay->clearMinutiae();
+            rightMinutiaeOverlay->setFragment(nullptr);
+            rightMinutiaeOverlay->update();
+        }
+        if (minutiaeOverlay) {  // Overlay legado
+            minutiaeOverlay->setFragment(nullptr);
+        }
+        
+        // Limpar overlays de regiões de fragmentos
+        if (leftFragmentRegionsOverlay) {
+            leftFragmentRegionsOverlay->setImage(nullptr);
+            leftFragmentRegionsOverlay->update();
+        }
+        if (rightFragmentRegionsOverlay) {
+            rightFragmentRegionsOverlay->setImage(nullptr);
+            rightFragmentRegionsOverlay->update();
+        }
 
         // Limpar histórico e lista de minúcias
         historyDisplay->clear();
@@ -1825,6 +1919,7 @@ void MainWindow::loadEntityToPanel(const QString& entityId, CurrentEntityType ty
 
     ImageViewer* targetViewer = targetPanel ? secondImageViewer : processedImageViewer;
     FingerprintEnhancer::MinutiaeOverlay* targetOverlay = targetPanel ? rightMinutiaeOverlay : leftMinutiaeOverlay;
+    FragmentRegionsOverlay* targetFragmentOverlay = targetPanel ? rightFragmentRegionsOverlay : leftFragmentRegionsOverlay;
 
     // Atualizar informações do painel
     if (targetPanel) {
@@ -1865,6 +1960,9 @@ void MainWindow::loadEntityToPanel(const QString& entityId, CurrentEntityType ty
         }
 
         targetViewer->setPixmap(QPixmap::fromImage(qimg));
+        
+        // Restaurar seleção de crop salva (se existir)
+        targetViewer->restoreCropSelectionState(entityId);
 
         // Configurar overlay se for fragmento
         if (type == ENTITY_FRAGMENT && fragment) {
@@ -1878,11 +1976,30 @@ void MainWindow::loadEntityToPanel(const QString& entityId, CurrentEntityType ty
 
             // Inicializar image offset (centralização)
             targetOverlay->setImageOffset(targetViewer->getImageOffset());
+            
+            // Limpar fragment regions overlay (não mostra em fragmentos)
+            targetFragmentOverlay->setImage(nullptr);
         } else {
             targetOverlay->setFragment(nullptr);
         }
+        
+        // Configurar fragment regions overlay se for imagem
+        if (type == ENTITY_IMAGE) {
+            FingerprintEnhancer::FingerprintImage* img = project->findImage(entityId);
+            if (img) {
+                targetFragmentOverlay->setImage(img);
+                targetFragmentOverlay->setScaleFactor(targetViewer->getScaleFactor());
+                
+                // Inicializar offsets
+                QPoint scrollOffset(targetViewer->horizontalScrollBar()->value(),
+                                   targetViewer->verticalScrollBar()->value());
+                targetFragmentOverlay->setScrollOffset(scrollOffset);
+                targetFragmentOverlay->setImageOffset(targetViewer->getImageOffset());
+            }
+        }
 
         targetOverlay->update();
+        targetFragmentOverlay->update();
     }
 
     // Se enviou para painel ativo, atualizar entidade corrente
@@ -1929,6 +2046,12 @@ void MainWindow::showViewerContextMenu(const QPoint& pos, bool isLeftPanel) {
                 if (currentEntityType == ENTITY_IMAGE) {
                     menu.addAction("📐 Destacar Imagem Inteira como Fragmento",
                                          this, &MainWindow::createFragmentFromWholeImage);
+                    menu.addSeparator();
+                    
+                    // Opção para exibir/ocultar regiões de fragmentos
+                    bool showing = leftFragmentRegionsOverlay->isShowingRegions();
+                    QString toggleText = showing ? "✗ Ocultar Regiões de Fragmentos" : "📍 Exibir Regiões de Fragmentos";
+                    menu.addAction(toggleText, this, &MainWindow::toggleShowFragmentRegions);
                 } else if (currentEntityType == ENTITY_FRAGMENT) {
                     menu.addAction("⚡ Inserção Rápida (sem classificar)", [this, imagePos]() {
                         addMinutiaQuickly(imagePos);
@@ -2253,7 +2376,8 @@ void MainWindow::applyCrop() {
     img->fragments.append(newFragment);
     PM::instance().getCurrentProject()->setModified();
 
-    // Desativar modo de recorte
+    // Desativar modo de recorte e limpar seleção salva
+    activeViewer->saveCropSelectionState(currentEntityId);  // Salvar seleção vazia
     activeViewer->clearCropSelection();
     activeViewer->setCropMode(false);
     setToolMode(MODE_NONE);
@@ -2277,6 +2401,12 @@ void MainWindow::applyCrop() {
 
 void MainWindow::cancelCropSelection() {
     ImageViewer* activeViewer = getActiveViewer();
+    
+    // Limpar seleção salva
+    if (!currentEntityId.isEmpty()) {
+        activeViewer->saveCropSelectionState(currentEntityId);  // Salvar seleção vazia
+    }
+    
     activeViewer->clearCropSelection();
     activeViewer->setCropMode(false);
     statusLabel->setText("Seleção cancelada.");
@@ -3153,6 +3283,20 @@ void MainWindow::clearAllMinutiae() {
     }
 }
 
+void MainWindow::toggleShowFragmentRegions() {
+    // Alternar estado
+    bool newState = !leftFragmentRegionsOverlay->isShowingRegions();
+    
+    leftFragmentRegionsOverlay->setShowRegions(newState);
+    rightFragmentRegionsOverlay->setShowRegions(newState);
+    
+    if (newState) {
+        statusLabel->setText("✓ Exibindo regiões de origem dos fragmentos");
+    } else {
+        statusLabel->setText("✗ Regiões de fragmentos ocultadas");
+    }
+}
+
 // ==================== MENU AFIS ====================
 
 void MainWindow::loadAFISDatabase() {
@@ -3431,8 +3575,6 @@ void MainWindow::setToolMode(ToolMode mode) {
             activeViewer->setCropMode(true);
             // Desabilitar overlay completamente no modo crop
             if (activeOverlay) {
-                fprintf(stderr, "[MainWindow] ESCONDENDO overlay no modo crop\n");
-                fflush(stderr);
                 activeOverlay->setVisible(false);
                 activeOverlay->setAttribute(Qt::WA_TransparentForMouseEvents, true);
                 activeOverlay->lower();  // Colocar overlay atrás

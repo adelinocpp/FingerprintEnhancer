@@ -497,6 +497,10 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
         menu.addSeparator();
 
         if (itemType == "IMAGE") {
+            menu.addAction("📍 Exibir/Ocultar Regiões de Fragmentos", [this]() {
+                emit toggleFragmentRegionsRequested();
+            });
+            menu.addSeparator();
             menu.addAction("🗑 Remover Imagem", [this, entityId]() {
                 emit deleteImageRequested(entityId);
             });
