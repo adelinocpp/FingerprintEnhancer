@@ -498,16 +498,33 @@ QPixmap ImageViewer::matToQPixmap(const cv::Mat &mat) {
     if (mat.empty()) return QPixmap();
     
     cv::Mat display;
+    QImage::Format format;
+    
     if (mat.channels() == 1) {
+        // Grayscale → RGB
         cv::cvtColor(mat, display, cv::COLOR_GRAY2RGB);
+        format = QImage::Format_RGB888;
+        fprintf(stderr, "[VIEWER] Convertendo GRAY → RGB\n");
     } else if (mat.channels() == 3) {
+        // BGR → RGB
         cv::cvtColor(mat, display, cv::COLOR_BGR2RGB);
+        format = QImage::Format_RGB888;
+        fprintf(stderr, "[VIEWER] Convertendo BGR → RGB\n");
+    } else if (mat.channels() == 4) {
+        // BGRA → RGBA (PNG com alpha channel)
+        cv::cvtColor(mat, display, cv::COLOR_BGRA2RGBA);
+        format = QImage::Format_RGBA8888;
+        fprintf(stderr, "[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)\n");
     } else {
-        display = mat;
+        // Fallback - copiar direto
+        display = mat.clone();
+        format = QImage::Format_RGB888;
+        fprintf(stderr, "[VIEWER] AVISO: Formato desconhecido com %d canais\n", mat.channels());
     }
     
-    QImage qimg(display.data, display.cols, display.rows, display.step, QImage::Format_RGB888);
-    return QPixmap::fromImage(qimg);
+    QImage qimg(display.data, display.cols, display.rows, display.step, format);
+    // IMPORTANTE: Clone para evitar que display seja destruído
+    return QPixmap::fromImage(qimg.copy());
 }
 
 void ImageViewer::adjustScrollBars(double factor) {

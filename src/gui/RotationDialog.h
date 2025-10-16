@@ -12,11 +12,13 @@
 #include <opencv2/opencv.hpp>
 
 class ImageViewer;
+class FragmentRegionsOverlay;
 
 namespace FingerprintEnhancer {
     struct Fragment;
     class MinutiaeOverlay;
     struct Minutia;
+    class FingerprintImage;
 }
 
 class RotationDialog : public QDialog {
@@ -26,6 +28,8 @@ public:
     explicit RotationDialog(const cv::Mat &image, ImageViewer *viewer, 
                            FingerprintEnhancer::Fragment *fragment = nullptr,
                            FingerprintEnhancer::MinutiaeOverlay *overlay = nullptr,
+                           FingerprintEnhancer::FingerprintImage *parentImage = nullptr,
+                           FragmentRegionsOverlay *fragmentOverlay = nullptr,
                            QWidget *parent = nullptr);
     ~RotationDialog();
 
@@ -48,6 +52,8 @@ private:
     ImageViewer *imageViewer;
     FingerprintEnhancer::Fragment *currentFragment;
     FingerprintEnhancer::MinutiaeOverlay *minutiaeOverlay;
+    FingerprintEnhancer::FingerprintImage *parentImage;
+    FragmentRegionsOverlay *fragmentRegionsOverlay;
 
     double finalAngle;
     bool accepted;

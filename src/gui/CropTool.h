@@ -45,6 +45,10 @@ public:
     void setSelectionRect(const QRect &rect);
     QRect getSelectionRect() const { return selectionRect; }
     bool hasSelection() const { return state == State::Selected || state == State::Moving; }
+    
+    // Configurar limites da imagem
+    void setImageSize(const QSize &size) { imageSize = size; }
+    QSize getImageSize() const { return imageSize; }
 
     // Limpar seleção
     void clearSelection();
@@ -77,6 +81,7 @@ private:
     QPoint startPoint;
     QPoint currentPoint;
     QPoint lastMousePos;
+    QSize imageSize;  // Limites da imagem para constrainr seleção
 
     // Configurações visuais
     QColor selectionBorderColor;
@@ -93,6 +98,7 @@ private:
     void moveSelection(const QPoint &delta);
     void resizeSelection(const QPoint &delta, State resizeState);
     QCursor getCursorForState(State state) const;
+    QRect constrainToImageBounds(const QRect &rect) const;
 };
 
 #endif // CROPTOOL_H

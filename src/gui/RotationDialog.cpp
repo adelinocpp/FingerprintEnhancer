@@ -1,21 +1,29 @@
 #include "RotationDialog.h"
 #include "ImageViewer.h"
 #include "MinutiaeOverlay.h"
+#include "FragmentRegionsOverlay.h"
 #include "../core/ProjectModel.h"
 #include <QGroupBox>
 
 RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer, 
                                FingerprintEnhancer::Fragment *fragment,
                                FingerprintEnhancer::MinutiaeOverlay *overlay,
+                               FingerprintEnhancer::FingerprintImage *parentImg,
+                               FragmentRegionsOverlay *fragmentOverlay,
                                QWidget *parent)
     : QDialog(parent), 
       originalImage(image.clone()), 
       imageViewer(viewer),
       currentFragment(fragment),
       minutiaeOverlay(overlay),
+      parentImage(parentImg),
+      fragmentRegionsOverlay(fragmentOverlay),
       finalAngle(0.0), 
       accepted(false), 
       useTransparentBackground(false) {
+
+    fprintf(stderr, "[ROTATION] Dialog criado - tem fragmentOverlay: %s\n", 
+            fragmentOverlay ? "SIM" : "NAO");
 
     setWindowTitle("Rotacionar Imagem - Interativo");
     setMinimumSize(400, 250);
@@ -120,11 +128,44 @@ void RotationDialog::onTransparentBgChanged(int state) {
 
 void RotationDialog::updatePreview(double angle) {
     finalAngle = angle;
-    rotatedImage = rotateImage(originalImage, angle);
+    
+    // VERIFICAR: Se rotacionando IMAGEM e o ângulo acumulado é ~0°, usar imagem original
+    if (parentImage) {
+        double accumulatedAngle = fmod(parentImage->currentRotationAngle + angle, 360.0);
+        if (accumulatedAngle < 0) accumulatedAngle += 360.0;
+        
+        fprintf(stderr, "[ROTATION] Rotacionando para %.1f graus (ângulo acumulado: %.1f)\n", angle, accumulatedAngle);
+        
+        // Se ângulo acumulado é ~0°, usar imagem REALMENTE original (sem borda)
+        if (fabs(accumulatedAngle) < 0.1 || fabs(accumulatedAngle - 360.0) < 0.1) {
+            fprintf(stderr, "[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)\n");
+            rotatedImage = parentImage->originalImage.clone();  // ✅ Usar originalImage da entidade, não do dialog
+        } else {
+            rotatedImage = rotateImage(originalImage, angle);
+        }
+    } else {
+        // Rotacionando fragmento: usar delta diretamente
+        fprintf(stderr, "[ROTATION] Rotacionando para %.1f graus\n", angle);
+        rotatedImage = rotateImage(originalImage, angle);
+    }
 
     // Atualizar viewer em tempo real
     if (imageViewer) {
         imageViewer->setImage(rotatedImage);
+        // Ajustar zoom para evitar distorção ao mudar tamanho da imagem
+        imageViewer->zoomToFit();
+    }
+    
+    // Atualizar overlay de regiões de fragmentos se rotacionando IMAGEM
+    if (parentImage && fragmentRegionsOverlay) {
+        // Definir ângulo de preview (acumulado com ângulo atual da imagem)
+        // IMPORTANTE: Normalizar para [0, 360) para evitar ângulos negativos
+        double previewAngle = fmod(parentImage->currentRotationAngle + angle, 360.0);
+        if (previewAngle < 0) previewAngle += 360.0;  // Garantir positivo
+        
+        fprintf(stderr, "[ROTATION] Atualizando overlay: currentAngle=%.1f + deltaAngle=%.1f = previewAngle=%.1f\n", 
+                parentImage->currentRotationAngle, angle, previewAngle);
+        fragmentRegionsOverlay->setPreviewRotationAngle(previewAngle);
     }
     
     // Rotacionar minúcias em tempo real se houver fragmento
@@ -147,6 +188,62 @@ void RotationDialog::updatePreview(double angle) {
 cv::Mat RotationDialog::rotateImage(const cv::Mat &image, double angle) {
     if (image.empty()) return image;
 
+    // ============================================================================================
+    // TODO: calcular posições dos fragmentos - ROTAÇÃO DA IMAGEM (REFERÊNCIA)
+    // ============================================================================================
+    // Esta é a função que REALMENTE rotaciona a imagem usando OpenCV.
+    // O overlay de fragmentos (FragmentRegionsOverlay::calculateRotatedPolygon) tenta replicar
+    // EXATAMENTE esta transformação para calcular onde os retângulos aparecem.
+    //
+    // ENTRADA:
+    // - image : cv::Mat da imagem a rotacionar (originalImage da entidade)
+    // - angle : Ângulo em graus (delta, não acumulado)
+    //
+    // SAÍDA:
+    // - cv::Mat rotacionado (pode ter tamanho maior com borda branca para ângulos arbitrários)
+    //
+    // MATRIZ DE ROTAÇÃO USADA:
+    // - cv::getRotationMatrix2D(center, -angle, 1.0)
+    // - Ajuste de offset: rotMatrix.at<double>(0,2) += (new_w/2.0) - center.x
+    //                     rotMatrix.at<double>(1,2) += (new_h/2.0) - center.y
+    // - Aplicada com: cv::warpAffine(image, rotated, rotMatrix, cv::Size(new_w, new_h))
+    // ============================================================================================
+
+    // Se o ângulo é ~0°, retornar imagem original sem borda branca
+    double normalizedAngle = fmod(angle, 360.0);
+    if (normalizedAngle < 0) normalizedAngle += 360.0;
+    
+    if (fabs(normalizedAngle) < 0.1 || fabs(normalizedAngle - 360.0) < 0.1) {
+        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~0°) - retornando imagem ORIGINAL (sem borda)\n", angle);
+        return image.clone();
+    }
+    
+    // Para múltiplos exatos de 90°, usar rotate() em vez de warpAffine (sem borda branca)
+    bool isMultipleOf90 = false;
+    int rotateCode = -1;
+    
+    if (fabs(normalizedAngle - 90.0) < 0.1) {
+        isMultipleOf90 = true;
+        rotateCode = cv::ROTATE_90_COUNTERCLOCKWISE;
+        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~90°) - usando cv::rotate (sem borda)\n", angle);
+    } else if (fabs(normalizedAngle - 180.0) < 0.1) {
+        isMultipleOf90 = true;
+        rotateCode = cv::ROTATE_180;
+        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~180°) - usando cv::rotate (sem borda)\n", angle);
+    } else if (fabs(normalizedAngle - 270.0) < 0.1) {
+        isMultipleOf90 = true;
+        rotateCode = cv::ROTATE_90_CLOCKWISE;
+        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~270°) - usando cv::rotate (sem borda)\n", angle);
+    }
+    
+    if (isMultipleOf90) {
+        cv::Mat rotated;
+        cv::rotate(image, rotated, rotateCode);
+        fprintf(stderr, "[ROTATION] Imagem rotacionada: canais=%d, tamanho=%dx%d\n",
+                rotated.channels(), rotated.cols, rotated.rows);
+        return rotated;
+    }
+
     // Converter ângulo para radianos (OpenCV usa sentido anti-horário, então invertemos)
     cv::Point2f center(image.cols / 2.0f, image.rows / 2.0f);
     cv::Mat rotMatrix = cv::getRotationMatrix2D(center, -angle, 1.0);
@@ -162,6 +259,9 @@ cv::Mat RotationDialog::rotateImage(const cv::Mat &image, double angle) {
     rotMatrix.at<double>(1, 2) += (new_h / 2.0) - center.y;
 
     cv::Mat rotated;
+    
+    fprintf(stderr, "[ROTATION] rotateImage: %.1f graus, canais=%d, transparente=%s\n", 
+            angle, image.channels(), useTransparentBackground ? "SIM" : "NAO");
 
     if (useTransparentBackground) {
         // Converter para BGRA se necessário
@@ -180,16 +280,38 @@ cv::Mat RotationDialog::rotateImage(const cv::Mat &image, double angle) {
         cv::warpAffine(imageWithAlpha, rotated, rotMatrix, cv::Size(new_w, new_h),
                        cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(0, 0, 0, 0));
     } else {
-        // Rotacionar com fundo branco (comportamento padrão)
+        // Rotacionar com fundo branco
+        // IMPORTANTE: Usar Scalar apropriado para número de canais
+        cv::Scalar borderColor;
+        if (image.channels() == 1) {
+            borderColor = cv::Scalar(255);  // Grayscale
+        } else if (image.channels() == 3) {
+            borderColor = cv::Scalar(255, 255, 255);  // BGR
+        } else if (image.channels() == 4) {
+            borderColor = cv::Scalar(255, 255, 255, 255);  // BGRA (PNG com alpha)
+        } else {
+            borderColor = cv::Scalar(255);
+        }
+        
         cv::warpAffine(image, rotated, rotMatrix, cv::Size(new_w, new_h),
-                       cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255, 255, 255));
+                       cv::INTER_LINEAR, cv::BORDER_CONSTANT, borderColor);
     }
+    
+    fprintf(stderr, "[ROTATION] Imagem rotacionada: canais=%d, tamanho=%dx%d\n",
+            rotated.channels(), rotated.cols, rotated.rows);
 
     return rotated;
 }
 
 void RotationDialog::onAccept() {
     accepted = true;
+    
+    // Limpar preview de rotação do overlay de fragmentos
+    if (fragmentRegionsOverlay) {
+        fprintf(stderr, "[ROTATION] Limpando preview de rotação do overlay ao aceitar\n");
+        fragmentRegionsOverlay->clearPreviewRotationAngle();
+    }
+    
     accept();
 }
 
@@ -199,6 +321,12 @@ void RotationDialog::onReject() {
     // Restaurar imagem original no viewer
     if (imageViewer) {
         imageViewer->setImage(originalImage);
+    }
+    
+    // Limpar preview de rotação do overlay de fragmentos
+    if (fragmentRegionsOverlay) {
+        fprintf(stderr, "[ROTATION] Limpando preview de rotação do overlay\n");
+        fragmentRegionsOverlay->clearPreviewRotationAngle();
     }
     
     // Restaurar minúcias originais se houver fragmento

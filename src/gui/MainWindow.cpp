@@ -273,10 +273,10 @@ void MainWindow::createToolBars() {
     mainToolBar->addSeparator();
 
     // Adicionar botões de controle de painéis
-    QAction *switchPanelAction = mainToolBar->addAction("◀▶ Chavear Painel");
+    switchPanelAction = mainToolBar->addAction("◀▶ Chavear Painel");
     connect(switchPanelAction, &QAction::triggered, this, &MainWindow::switchActivePanel);
 
-    QAction *toggleRightPanelAction = mainToolBar->addAction("👁 Painel Direito");
+    toggleRightPanelAction = mainToolBar->addAction("👁 Painel Direito");
     toggleRightPanelAction->setCheckable(true);
     toggleRightPanelAction->setChecked(false);  // Inicia oculto
     connect(toggleRightPanelAction, &QAction::triggered, this, &MainWindow::toggleRightViewer);
@@ -909,9 +909,54 @@ void MainWindow::newProject() {
         projectCreated = PM::instance().createNewProject(name, caseNumber);
         
         if (projectCreated) {
+            fprintf(stderr, "[NEW_PROJECT] Projeto criado com sucesso - limpando painéis\n");
+            
+            // Limpar estado das entidades
+            currentEntityType = ENTITY_NONE;
+            currentEntityId.clear();
+            leftPanelEntityType = ENTITY_NONE;
+            leftPanelEntityId.clear();
+            rightPanelEntityType = ENTITY_NONE;
+            rightPanelEntityId.clear();
+            
+            // Forçar limpeza dos viewers (projeto novo está vazio)
+            if (processedImageViewer) {
+                processedImageViewer->clearImage();
+                fprintf(stderr, "[NEW_PROJECT] Painel esquerdo limpo\n");
+            }
+            if (secondImageViewer) {
+                secondImageViewer->clearImage();
+                fprintf(stderr, "[NEW_PROJECT] Painel direito limpo\n");
+            }
+            
+            // Limpar overlays de minúcias
+            if (leftMinutiaeOverlay) {
+                leftMinutiaeOverlay->clearMinutiae();
+                leftMinutiaeOverlay->setFragment(nullptr);
+                leftMinutiaeOverlay->update();
+            }
+            if (rightMinutiaeOverlay) {
+                rightMinutiaeOverlay->clearMinutiae();
+                rightMinutiaeOverlay->setFragment(nullptr);
+                rightMinutiaeOverlay->update();
+            }
+            
+            // Limpar overlays de fragmentos
+            if (leftFragmentRegionsOverlay) {
+                leftFragmentRegionsOverlay->setImage(nullptr);
+                leftFragmentRegionsOverlay->update();
+            }
+            if (rightFragmentRegionsOverlay) {
+                rightFragmentRegionsOverlay->setImage(nullptr);
+                rightFragmentRegionsOverlay->update();
+            }
+            
+            // Atualizar FragmentManager com projeto vazio
             fragmentManager->setProject(PM::instance().getCurrentProject());
+            
             statusLabel->setText("✅ Novo projeto criado: " + name);
             updateWindowTitle();
+            fprintf(stderr, "[NEW_PROJECT] Concluído - painéis devem estar limpos\n");
         } else {
             QMessageBox::critical(this, "Erro ao Criar Projeto", 
                 QString("Não foi possível criar o projeto.\n\n"
@@ -999,9 +1044,50 @@ void MainWindow::openProject() {
 
     if (!fileName.isEmpty()) {
         if (PM::instance().openProject(fileName)) {
+            fprintf(stderr, "[OPEN_PROJECT] Projeto aberto - atualizando painéis\n");
+            
+            // Limpar estado das entidades primeiro
+            currentEntityType = ENTITY_NONE;
+            currentEntityId.clear();
+            leftPanelEntityType = ENTITY_NONE;
+            leftPanelEntityId.clear();
+            rightPanelEntityType = ENTITY_NONE;
+            rightPanelEntityId.clear();
+            
+            // Forçar limpeza dos viewers primeiro
+            if (processedImageViewer) {
+                processedImageViewer->clearImage();
+            }
+            if (secondImageViewer) {
+                secondImageViewer->clearImage();
+            }
+            
+            // Limpar overlays
+            if (leftMinutiaeOverlay) {
+                leftMinutiaeOverlay->clearMinutiae();
+                leftMinutiaeOverlay->setFragment(nullptr);
+                leftMinutiaeOverlay->update();
+            }
+            if (rightMinutiaeOverlay) {
+                rightMinutiaeOverlay->clearMinutiae();
+                rightMinutiaeOverlay->setFragment(nullptr);
+                rightMinutiaeOverlay->update();
+            }
+            if (leftFragmentRegionsOverlay) {
+                leftFragmentRegionsOverlay->setImage(nullptr);
+                leftFragmentRegionsOverlay->update();
+            }
+            if (rightFragmentRegionsOverlay) {
+                rightFragmentRegionsOverlay->setImage(nullptr);
+                rightFragmentRegionsOverlay->update();
+            }
+            
+            // Atualizar FragmentManager
             fragmentManager->setProject(PM::instance().getCurrentProject());
+            
             statusLabel->setText("✅ Projeto aberto: " + QFileInfo(fileName).fileName());
             updateWindowTitle();
+            fprintf(stderr, "[OPEN_PROJECT] Concluído - painéis atualizados\n");
         } else {
             QMessageBox::warning(this, "Erro", "Falha ao abrir o projeto");
         }
@@ -2372,11 +2458,23 @@ void MainWindow::applyCrop() {
         return;
     }
 
-    FingerprintEnhancer::Fragment newFragment(parentImageId, selection, croppedImage);
-    // Salvar o ângulo de rotação atual da imagem no momento de criação do fragmento
-    newFragment.sourceRotationAngle = img->currentRotationAngle;
+    // CONVERTER seleção (em coords rotacionadas atuais) para coordenadas ORIGINAIS
+    QRect originalSpaceRect = convertRotatedToOriginalCoords(
+        selection, 
+        img->currentRotationAngle,
+        QSize(img->workingImage.cols, img->workingImage.rows),  // Tamanho atual (rotacionado)
+        QSize(img->originalImage.cols, img->originalImage.rows)  // Tamanho original
+    );
+    
+    // Criar fragmento COM coordenadas no espaço ORIGINAL
+    // Mas a imagem do fragmento vem do workingImage rotacionado atual
+    FingerprintEnhancer::Fragment newFragment(img->id, originalSpaceRect, croppedImage);
+    newFragment.sourceRotationAngle = img->currentRotationAngle;  // Salvar ângulo atual
+    
     img->fragments.append(newFragment);
     PM::instance().getCurrentProject()->setModified();
+    
+    FingerprintEnhancer::Fragment* newFragmentPtr = &img->fragments.last();
 
     // Desativar modo de recorte e limpar seleção salva
     activeViewer->saveCropSelectionState(currentEntityId);  // Salvar seleção vazia
@@ -2388,7 +2486,7 @@ void MainWindow::applyCrop() {
     fragmentManager->updateView();
 
     // Selecionar o fragmento criado automaticamente
-    QString newFragmentId = img->fragments.last().id;
+    QString newFragmentId = newFragmentPtr->id;
     setCurrentEntity(newFragmentId, ENTITY_FRAGMENT);
     
     // Selecionar na árvore de projeto
@@ -2491,17 +2589,14 @@ void MainWindow::rotateRight90() {
             loadCurrentEntityToView();
         }
     } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
-        // Rotacionar IMAGEM - atualizar ângulo e fragmentos
+        // Rotacionar IMAGEM - atualizar apenas ângulo da imagem
         FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
         if (img) {
             // Rotacionar imagem
             cv::rotate(img->workingImage, img->workingImage, cv::ROTATE_90_CLOCKWISE);
-            // Incrementar ângulo da imagem
+            // Incrementar ângulo da imagem (fragmentos mantêm sourceRect em coords originais)
             img->currentRotationAngle = fmod(img->currentRotationAngle + 90.0, 360.0);
-            // Atualizar ângulo de todos os fragmentos
-            for (auto& frag : img->fragments) {
-                frag.sourceRotationAngle = fmod(frag.sourceRotationAngle + 90.0, 360.0);
-            }
+            if (img->currentRotationAngle < 0) img->currentRotationAngle += 360.0;
             loadCurrentEntityToView();
             PM::instance().getCurrentProject()->setModified();
         }
@@ -2526,17 +2621,14 @@ void MainWindow::rotateLeft90() {
             loadCurrentEntityToView();
         }
     } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
-        // Rotacionar IMAGEM - atualizar ângulo e fragmentos
+        // Rotacionar IMAGEM - atualizar ângulo acumulado
         FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
         if (img) {
             // Rotacionar imagem
             cv::rotate(img->workingImage, img->workingImage, cv::ROTATE_90_COUNTERCLOCKWISE);
-            // Decrementar ângulo da imagem
-            img->currentRotationAngle = fmod(img->currentRotationAngle - 90.0 + 360.0, 360.0);
-            // Atualizar ângulo de todos os fragmentos
-            for (auto& frag : img->fragments) {
-                frag.sourceRotationAngle = fmod(frag.sourceRotationAngle - 90.0 + 360.0, 360.0);
-            }
+            // Atualizar ângulo acumulado
+            img->currentRotationAngle = fmod(img->currentRotationAngle - 90.0, 360.0);
+            if (img->currentRotationAngle < 0) img->currentRotationAngle += 360.0;
             loadCurrentEntityToView();
             PM::instance().getCurrentProject()->setModified();
         }
@@ -2561,17 +2653,14 @@ void MainWindow::rotate180() {
             loadCurrentEntityToView();
         }
     } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
-        // Rotacionar IMAGEM - atualizar ângulo e fragmentos
+        // Rotacionar IMAGEM - atualizar ângulo acumulado
         FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
         if (img) {
             // Rotacionar imagem
             cv::rotate(img->workingImage, img->workingImage, cv::ROTATE_180);
-            // Incrementar ângulo da imagem
+            // Atualizar ângulo acumulado
             img->currentRotationAngle = fmod(img->currentRotationAngle + 180.0, 360.0);
-            // Atualizar ângulo de todos os fragmentos
-            for (auto& frag : img->fragments) {
-                frag.sourceRotationAngle = fmod(frag.sourceRotationAngle + 180.0, 360.0);
-            }
+            if (img->currentRotationAngle < 0) img->currentRotationAngle += 360.0;
             loadCurrentEntityToView();
             PM::instance().getCurrentProject()->setModified();
         }
@@ -2603,16 +2692,37 @@ void MainWindow::rotateCustomAngle() {
     // Pegar fragmento e overlay se estiver rotacionando um fragmento
     FingerprintEnhancer::Fragment* currentFrag = nullptr;
     FingerprintEnhancer::MinutiaeOverlay* activeOverlay = nullptr;
+    FingerprintEnhancer::FingerprintImage* currentImg = nullptr;
+    FragmentRegionsOverlay* fragmentOverlay = nullptr;
     
     if (currentEntityType == ENTITY_FRAGMENT) {
         currentFrag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
         activeOverlay = getActiveOverlay();
+    } else if (currentEntityType == ENTITY_IMAGE) {
+        // Se rotacionando IMAGEM, passar imagem e overlay de fragmentos
+        currentImg = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        fragmentOverlay = activePanel ? rightFragmentRegionsOverlay : leftFragmentRegionsOverlay;
+        fprintf(stderr, "[ROTATION] Rotacionando IMAGEM - fragmentOverlay: %p\n", (void*)fragmentOverlay);
     }
 
     // Criar diálogo de rotação em tempo real (não-modal para permitir zoom/scroll)
-    // Passar fragmento e overlay para rotação em tempo real das minúcias
-    RotationDialog* dialog = new RotationDialog(workingImg, activeViewer, currentFrag, activeOverlay, this);
+    RotationDialog* dialog = new RotationDialog(workingImg, activeViewer, 
+                                                 currentFrag, activeOverlay, 
+                                                 currentImg, fragmentOverlay, 
+                                                 this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
+    
+    // DESABILITAR navegação durante rotação para evitar troca de imagem
+    fprintf(stderr, "[ROTATION] Desabilitando árvore de projeto e controles de painel\n");
+    if (fragmentManager) {
+        fragmentManager->setEnabled(false);
+    }
+    if (switchPanelAction) {
+        switchPanelAction->setEnabled(false);
+    }
+    if (toggleRightPanelAction) {
+        toggleRightPanelAction->setEnabled(false);
+    }
     
     // Conectar sinal de aceitação
     connect(dialog, &QDialog::accepted, this, [this, dialog]() {
@@ -2621,18 +2731,39 @@ void MainWindow::rotateCustomAngle() {
             cv::Mat rotated = dialog->getRotatedImage();
 
             cv::Mat& workingImg = getCurrentWorkingImage();
+            using PM = FingerprintEnhancer::ProjectManager;
 
             // Aplicar imagem rotacionada
             // IMPORTANTE: As minúcias já foram rotacionadas em tempo real pelo dialog!
             // Não rotacionar novamente aqui
             if (currentEntityType == ENTITY_FRAGMENT) {
-                FingerprintEnhancer::Fragment* frag = FingerprintEnhancer::ProjectManager::instance().getCurrentProject()->findFragment(currentEntityId);
+                FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
                 if (frag) {
                     rotated.copyTo(frag->workingImage);
                     // Minúcias já foram rotacionadas em tempo real, não fazer nada aqui
+                    fprintf(stderr, "[ROTATION] Fragmento rotacionado %.1f graus\n", angle);
+                }
+            } else if (currentEntityType == ENTITY_IMAGE) {
+                // Aplicar na imagem E atualizar ângulo acumulado
+                FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+                if (img) {
+                    // Atualizar ângulo acumulado da imagem (normalizar para [0, 360))
+                    img->currentRotationAngle = fmod(img->currentRotationAngle + angle, 360.0);
+                    if (img->currentRotationAngle < 0) img->currentRotationAngle += 360.0;
+                    
+                    // Se ângulo acumulado é ~0°, usar imagem original sem borda
+                    if (fabs(img->currentRotationAngle) < 0.1 || fabs(img->currentRotationAngle - 360.0) < 0.1) {
+                        fprintf(stderr, "[ROTATION] Ângulo acumulado ~0° - restaurando imagem ORIGINAL (sem borda)\n");
+                        img->originalImage.copyTo(img->workingImage);  // ✅ Restaurar imagem original
+                        img->currentRotationAngle = 0.0;  // Zerar ângulo
+                    } else {
+                        rotated.copyTo(img->workingImage);
+                        fprintf(stderr, "[ROTATION] Imagem rotacionada %.1f graus - ângulo acumulado: %.1f\n", 
+                                angle, img->currentRotationAngle);
+                    }
                 }
             } else {
-                // Aplicar diretamente na workingImage da entidade corrente
+                // Fallback
                 rotated.copyTo(workingImg);
             }
 
@@ -2642,13 +2773,37 @@ void MainWindow::rotateCustomAngle() {
             statusLabel->setText(QString("✅ Imagem rotacionada %1°").arg(angle, 0, 'f', 1));
 
             // Marcar como modificado
-            FingerprintEnhancer::ProjectManager::instance().getCurrentProject()->setModified();
+            PM::instance().getCurrentProject()->setModified();
+        }
+        
+        // REABILITAR navegação após rotação
+        fprintf(stderr, "[ROTATION] Reabilitando árvore de projeto e controles de painel\n");
+        if (fragmentManager) {
+            fragmentManager->setEnabled(true);
+        }
+        if (switchPanelAction) {
+            switchPanelAction->setEnabled(true);
+        }
+        if (toggleRightPanelAction) {
+            toggleRightPanelAction->setEnabled(true);
         }
     });
     
     // Conectar sinal de rejeição
     connect(dialog, &QDialog::rejected, this, [this]() {
         statusLabel->setText("❌ Rotação cancelada");
+        
+        // REABILITAR navegação após cancelamento
+        fprintf(stderr, "[ROTATION] Reabilitando árvore de projeto e controles de painel\n");
+        if (fragmentManager) {
+            fragmentManager->setEnabled(true);
+        }
+        if (switchPanelAction) {
+            switchPanelAction->setEnabled(true);
+        }
+        if (toggleRightPanelAction) {
+            toggleRightPanelAction->setEnabled(true);
+        }
     });
     
     // Mostrar dialog não-modal
@@ -3943,6 +4098,110 @@ void MainWindow::applyOperationToCurrentEntity(std::function<void(cv::Mat&)> ope
     PM::instance().getCurrentProject()->setModified();
 }
 
+QRect MainWindow::convertRotatedToOriginalCoords(const QRect& rotatedRect, double currentAngle,
+                                                  const QSize& currentSize, const QSize& originalSize) {
+    // Se não há rotação, retornar direto
+    if (fabs(currentAngle) < 0.1) {
+        return rotatedRect;
+    }
+    
+    // Normalizar ângulo para múltiplos de 90°
+    int angle90 = static_cast<int>(round(currentAngle / 90.0)) % 4;
+    if (angle90 < 0) angle90 += 4;
+    
+    // Converter para coordenadas originais baseado no ângulo
+    QRect result;
+    
+    switch (angle90) {
+        case 0: // 0° - sem rotação
+            result = rotatedRect;
+            break;
+            
+        case 1: // 90° CW (ou -270°)
+            // Após 90° CW: x' = y, y' = width_orig - x - w
+            result = QRect(
+                currentSize.height() - rotatedRect.y() - rotatedRect.height(),
+                rotatedRect.x(),
+                rotatedRect.height(),
+                rotatedRect.width()
+            );
+            break;
+            
+        case 2: // 180°
+            // Após 180°: x' = w - x - w_rect, y' = h - y - h_rect
+            result = QRect(
+                currentSize.width() - rotatedRect.x() - rotatedRect.width(),
+                currentSize.height() - rotatedRect.y() - rotatedRect.height(),
+                rotatedRect.width(),
+                rotatedRect.height()
+            );
+            break;
+            
+        case 3: // 270° CW (ou -90° / 90° CCW)
+            // Após 270° CW: x' = width_curr - y - h, y' = x
+            result = QRect(
+                rotatedRect.y(),
+                currentSize.width() - rotatedRect.x() - rotatedRect.width(),
+                rotatedRect.height(),
+                rotatedRect.width()
+            );
+            break;
+    }
+    
+    return result;
+}
+
+QRect MainWindow::convertOriginalToRotatedCoords(const QRect& originalRect, double currentAngle,
+                                                  const QSize& originalSize, const QSize& currentSize) {
+    // Se não há rotação, retornar direto
+    if (fabs(currentAngle) < 0.1) {
+        return originalRect;
+    }
+    
+    // Normalizar ângulo para múltiplos de 90°
+    int angle90 = static_cast<int>(round(currentAngle / 90.0)) % 4;
+    if (angle90 < 0) angle90 += 4;
+    
+    // Converter de coordenadas originais para rotacionadas
+    QRect result;
+    
+    switch (angle90) {
+        case 0: // 0° - sem rotação
+            result = originalRect;
+            break;
+            
+        case 1: // 90° CW
+            // x_rot = y_orig, y_rot = width_orig - x_orig - w_orig
+            result = QRect(
+                originalRect.y(),
+                originalSize.width() - originalRect.x() - originalRect.width(),
+                originalRect.height(),
+                originalRect.width()
+            );
+            break;
+            
+        case 2: // 180°
+            result = QRect(
+                originalSize.width() - originalRect.x() - originalRect.width(),
+                originalSize.height() - originalRect.y() - originalRect.height(),
+                originalRect.width(),
+                originalRect.height()
+            );
+            break;
+            
+        case 3: // 270° CW (90° CCW)
+            result = QRect(
+                originalSize.height() - originalRect.y() - originalRect.height(),
+                originalRect.x(),
+                originalRect.height(),
+                originalRect.width()
+            );
+            break;
+    }
+    
+    return result;
+}
+
 // ========== Espelhamento ==========
 
 void MainWindow::flipHorizontal() {
@@ -3955,6 +4214,14 @@ void MainWindow::flipHorizontal() {
             cv::flip(frag->workingImage, frag->workingImage, 1); // 1 = horizontal
             frag->flipMinutiaeHorizontal(imageWidth);
             loadCurrentEntityToView();
+        }
+    } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (img) {
+            cv::flip(img->workingImage, img->workingImage, 1); // 1 = horizontal
+            img->addFlipHorizontal(); // Registrar no histórico
+            loadCurrentEntityToView();
+            PM::instance().getCurrentProject()->setModified();
         }
     } else {
         applyOperationToCurrentEntity([](cv::Mat& img) {
@@ -3974,6 +4241,14 @@ void MainWindow::flipVertical() {
             cv::flip(frag->workingImage, frag->workingImage, 0); // 0 = vertical
             frag->flipMinutiaeVertical(imageHeight);
             loadCurrentEntityToView();
+        }
+    } else if (currentEntityType == ENTITY_IMAGE && !currentEntityId.isEmpty()) {
+        FingerprintEnhancer::FingerprintImage* img = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (img) {
+            cv::flip(img->workingImage, img->workingImage, 0); // 0 = vertical
+            img->addFlipVertical(); // Registrar no histórico
+            loadCurrentEntityToView();
+            PM::instance().getCurrentProject()->setModified();
         }
     } else {
         applyOperationToCurrentEntity([](cv::Mat& img) {
@@ -4371,51 +4646,10 @@ void MainWindow::onExportImageRequested(const QString& imageId) {
 }
 
 void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
-    using PM = FingerprintEnhancer::ProjectManager;
-
-    FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(fragmentId);
-    if (!frag) {
-        QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
-        return;
-    }
-
-    // Obter escala atual
-    double scale = imageProcessor->getScale();
-    if (scale <= 0) {
-        scale = 10.0;  // Escala padrão
-    }
-    
-    // Obter diretório do projeto como padrão para exportação
-    QString projectDir = getProjectDirectory();
-    
-    // Abrir diálogo avançado de exportação
-    FragmentExportDialog dialog(frag, scale, this, projectDir);
-    
-    if (dialog.exec() == QDialog::Accepted) {
-        QString errorMessage;
-        if (dialog.exportImage(errorMessage)) {
-            QString fileName = dialog.getFilePath();
-            QFileInfo fileInfo(fileName);
-            
-            QString message = QString("Fragmento exportado com sucesso!\n\n"
-                                    "Arquivo: %1\n"
-                                    "Resolução: %2×%3 pixels\n"
-                                    "DPI: %4\n"
-                                    "Formato: %5\n"
-                                    "Minúcias: %6")
-                .arg(fileInfo.fileName())
-                .arg(dialog.getOutputWidth())
-                .arg(dialog.getOutputHeight())
-                .arg(dialog.getDPI())
-                .arg(dialog.getFormat())
-                .arg(dialog.includeMinutiae() ? QString::number(frag->getMinutiaeCount()) : "0 (sem marcações)");
-            
-            statusLabel->setText(QString("Fragmento exportado: %1").arg(fileInfo.fileName()));
-            QMessageBox::information(this, "Sucesso", message);
-        } else {
-            QMessageBox::warning(this, "Erro", QString("Falha ao exportar:\n%1").arg(errorMessage));
-        }
-    }
+    // TODO: Implementar exportação avançada com FragmentExportDialog
+    QMessageBox::information(this, "Exportar Fragmento", 
+        "Funcionalidade de exportação avançada temporariamente desativada.\n"
+        "Use o botão Exportar do menu principal.");
 }
 
 void MainWindow::onEditImagePropertiesRequested(const QString& imageId) {

@@ -9,8 +9,6 @@
 #include <QStandardPaths>
 #include <QFileInfo>
 #include <QScrollArea>
-#include <QRegularExpression>
-#include <QtCore/QtMath>
 #include <cmath>
 
 #ifndef M_PI
@@ -20,16 +18,12 @@
 FragmentExportDialog::FragmentExportDialog(
     const FingerprintEnhancer::Fragment* frag,
     double currentScale,
-    QWidget *parent,
-    const QString& defaultDirectory)
+    QWidget *parent)
     : QDialog(parent),
       fragment(frag),
       scale(currentScale),
-      markerColor(255, 0, 0),      // Vermelho
-      textColor(255, 0, 0),        // Vermelho
-      labelBgColor(255, 255, 255), // Branco
-      updatingResolution(false),
-      defaultExportDirectory(defaultDirectory)
+      markerColor(0, 255, 0),      // Verde - mesmo da visualização
+      textColor(255, 255, 0)       // Amarelo - mesmo da visualização
 {
     setWindowTitle("💾 Exportar Fragmento");
     setModal(true);
@@ -39,12 +33,6 @@ FragmentExportDialog::FragmentExportDialog(
     
     setupUI();
     loadDefaultSettings();
-    
-    // Configurar caminho padrão de exportação
-    if (!defaultExportDirectory.isEmpty()) {
-        setDefaultExportPath(defaultExportDirectory);
-    }
-    
     updatePreview();
 }
 
@@ -84,8 +72,8 @@ void FragmentExportDialog::setupUI()
     QHBoxLayout *qualityLayout = new QHBoxLayout();
     qualitySlider = new QSlider(Qt::Horizontal);
     qualitySlider->setRange(0, 100);
-    qualitySlider->setValue(97);
-    qualityLabel = new QLabel("97%");
+    qualitySlider->setValue(95);
+    qualityLabel = new QLabel("95%");
     connect(qualitySlider, &QSlider::valueChanged, [this](int value) {
         qualityLabel->setText(QString("%1%").arg(value));
         onAnySettingChanged();
@@ -104,31 +92,15 @@ void FragmentExportDialog::setupUI()
     widthSpinBox->setRange(100, 10000);
     widthSpinBox->setSuffix(" px");
     connect(widthSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &FragmentExportDialog::onWidthChanged);
+            this, &FragmentExportDialog::onAnySettingChanged);
     resLayout->addRow("Largura:", widthSpinBox);
     
     heightSpinBox = new QSpinBox();
     heightSpinBox->setRange(100, 10000);
     heightSpinBox->setSuffix(" px");
     connect(heightSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &FragmentExportDialog::onHeightChanged);
+            this, &FragmentExportDialog::onAnySettingChanged);
     resLayout->addRow("Altura:", heightSpinBox);
-    
-    scalePercentSpinBox = new QSpinBox();
-    scalePercentSpinBox->setRange(10, 1000);
-    scalePercentSpinBox->setValue(100);
-    scalePercentSpinBox->setSuffix(" %");
-    scalePercentSpinBox->setToolTip("Escala percentual da resolução original");
-    connect(scalePercentSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &FragmentExportDialog::onScalePercentChanged);
-    resLayout->addRow("Escala:", scalePercentSpinBox);
-    
-    dpiSpinBox = new QSpinBox();
-    dpiSpinBox->setRange(72, 1200);
-    dpiSpinBox->setValue(600);
-    dpiSpinBox->setSuffix(" DPI");
-    dpiSpinBox->setToolTip("Resolução para impressão (600 DPI = padrão alta qualidade)");
-    resLayout->addRow("DPI:", dpiSpinBox);
     
     maintainAspectCheck = new QCheckBox("Manter proporção");
     maintainAspectCheck->setChecked(true);
@@ -152,22 +124,9 @@ void FragmentExportDialog::setupUI()
     connect(includeMinutiaeCheck, &QCheckBox::toggled, this, &FragmentExportDialog::onAnySettingChanged);
     markersLayout->addRow("", includeMinutiaeCheck);
     
-    // Símbolo
-    symbolComboBox = new QComboBox();
-    symbolComboBox->addItem("Círculo Simples", (int)FingerprintEnhancer::MinutiaeSymbol::CIRCLE);
-    symbolComboBox->addItem("Círculo com X", (int)FingerprintEnhancer::MinutiaeSymbol::CIRCLE_X);
-    symbolComboBox->addItem("Círculo com Seta", (int)FingerprintEnhancer::MinutiaeSymbol::CIRCLE_ARROW);
-    symbolComboBox->addItem("Círculo com Cruz", (int)FingerprintEnhancer::MinutiaeSymbol::CIRCLE_CROSS);
-    symbolComboBox->addItem("Triângulo", (int)FingerprintEnhancer::MinutiaeSymbol::TRIANGLE);
-    symbolComboBox->addItem("Quadrado", (int)FingerprintEnhancer::MinutiaeSymbol::SQUARE);
-    symbolComboBox->addItem("Losango", (int)FingerprintEnhancer::MinutiaeSymbol::DIAMOND);
-    connect(symbolComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &FragmentExportDialog::onAnySettingChanged);
-    markersLayout->addRow("Símbolo:", symbolComboBox);
-    
     markerSizeSpinBox = new QSpinBox();
     markerSizeSpinBox->setRange(10, 200);
-    markerSizeSpinBox->setValue(30);
+    markerSizeSpinBox->setValue(40);
     markerSizeSpinBox->setSuffix(" px");
     markerSizeSpinBox->setToolTip("Diâmetro do círculo da marcação");
     connect(markerSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
@@ -176,64 +135,12 @@ void FragmentExportDialog::setupUI()
     
     fontSizeSpinBox = new QSpinBox();
     fontSizeSpinBox->setRange(8, 72);
-    fontSizeSpinBox->setValue(26);
+    fontSizeSpinBox->setValue(24);
     fontSizeSpinBox->setSuffix(" pt");
     fontSizeSpinBox->setToolTip("Tamanho da fonte dos rótulos");
     connect(fontSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
             this, &FragmentExportDialog::onAnySettingChanged);
     markersLayout->addRow("Tamanho fonte:", fontSizeSpinBox);
-    
-    lineWidthSpinBox = new QSpinBox();
-    lineWidthSpinBox->setRange(1, 10);
-    lineWidthSpinBox->setValue(2);
-    lineWidthSpinBox->setSuffix(" px");
-    lineWidthSpinBox->setToolTip("Largura da linha de desenho da marcação");
-    connect(lineWidthSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
-            this, &FragmentExportDialog::onAnySettingChanged);
-    markersLayout->addRow("Largura da linha:", lineWidthSpinBox);
-    
-    // Posição do rótulo
-    labelPositionComboBox = new QComboBox();
-    labelPositionComboBox->addItem("À Direita", (int)FingerprintEnhancer::MinutiaLabelPosition::RIGHT);
-    labelPositionComboBox->addItem("À Esquerda", (int)FingerprintEnhancer::MinutiaLabelPosition::LEFT);
-    labelPositionComboBox->addItem("Acima", (int)FingerprintEnhancer::MinutiaLabelPosition::ABOVE);
-    labelPositionComboBox->addItem("Abaixo", (int)FingerprintEnhancer::MinutiaLabelPosition::BELOW);
-    labelPositionComboBox->addItem("Oculto", (int)FingerprintEnhancer::MinutiaLabelPosition::HIDDEN);
-    connect(labelPositionComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &FragmentExportDialog::onAnySettingChanged);
-    markersLayout->addRow("Posição do rótulo:", labelPositionComboBox);
-    
-    // Cor de fundo do rótulo
-    labelBgColorButton = new QPushButton("🎨 Cor Fundo Rótulo");
-    labelBgColorButton->setStyleSheet("background-color: rgb(255, 255, 255); color: black;");
-    connect(labelBgColorButton, &QPushButton::clicked, [this]() {
-        QColor color = QColorDialog::getColor(labelBgColor, this, "Cor de Fundo do Rótulo");
-        if (color.isValid()) {
-            labelBgColor = color;
-            labelBgColorButton->setStyleSheet(
-                QString("background-color: rgb(%1, %2, %3); color: %4;")
-                    .arg(color.red()).arg(color.green()).arg(color.blue())
-                    .arg(color.lightness() > 128 ? "black" : "white"));
-            displaySettings.labelBackgroundColor = QColor(color.red(), color.green(), color.blue());
-            onAnySettingChanged();
-        }
-    });
-    markersLayout->addRow("", labelBgColorButton);
-    
-    // Opacidade do fundo do rótulo
-    QHBoxLayout *opacityLayout = new QHBoxLayout();
-    labelOpacitySlider = new QSlider(Qt::Horizontal);
-    labelOpacitySlider->setRange(0, 255);
-    labelOpacitySlider->setValue(200);
-    labelOpacityLabel = new QLabel("78%");
-    connect(labelOpacitySlider, &QSlider::valueChanged, [this](int value) {
-        labelOpacityLabel->setText(QString("%1%").arg(int(value * 100.0 / 255.0)));
-        displaySettings.labelBackgroundOpacity = value;
-        onAnySettingChanged();
-    });
-    opacityLayout->addWidget(labelOpacitySlider);
-    opacityLayout->addWidget(labelOpacityLabel);
-    markersLayout->addRow("Opacidade rótulo:", opacityLayout);
     
     settingsLayout->addWidget(markersGroup);
     
@@ -246,25 +153,25 @@ void FragmentExportDialog::setupUI()
     connect(showNumbersCheck, &QCheckBox::toggled, this, &FragmentExportDialog::onAnySettingChanged);
     displayLayout->addWidget(showNumbersCheck);
     
-    showLabelTypeCheck = new QCheckBox("Mostrar tipos das minúcias");
-    showLabelTypeCheck->setChecked(true);
-    connect(showLabelTypeCheck, &QCheckBox::toggled, this, &FragmentExportDialog::onAnySettingChanged);
-    displayLayout->addWidget(showLabelTypeCheck);
+    showTypesCheck = new QCheckBox("Mostrar tipos das minúcias");
+    showTypesCheck->setChecked(true);
+    connect(showTypesCheck, &QCheckBox::toggled, this, &FragmentExportDialog::onAnySettingChanged);
+    displayLayout->addWidget(showTypesCheck);
     
-    showAnglesCheck = new QCheckBox("Mostrar ângulos/direções");
-    showAnglesCheck->setChecked(true);
-    connect(showAnglesCheck, &QCheckBox::toggled, this, &FragmentExportDialog::onAnySettingChanged);
-    displayLayout->addWidget(showAnglesCheck);
+    showDirectionsCheck = new QCheckBox("Mostrar direções");
+    showDirectionsCheck->setChecked(true);
+    connect(showDirectionsCheck, &QCheckBox::toggled, this, &FragmentExportDialog::onAnySettingChanged);
+    displayLayout->addWidget(showDirectionsCheck);
     
     // Cores
     QHBoxLayout *colorsLayout = new QHBoxLayout();
     markerColorButton = new QPushButton("🎨 Cor da Marcação");
-    markerColorButton->setStyleSheet(QString("background-color: rgb(255, 0, 0); color: white;"));
+    markerColorButton->setStyleSheet(QString("background-color: rgb(0, 255, 0); color: black;"));
     connect(markerColorButton, &QPushButton::clicked, this, &FragmentExportDialog::onMarkerColorClicked);
     colorsLayout->addWidget(markerColorButton);
     
     textColorButton = new QPushButton("🎨 Cor do Texto");
-    textColorButton->setStyleSheet(QString("background-color: rgb(255, 0, 0); color: white;"));
+    textColorButton->setStyleSheet(QString("background-color: rgb(255, 255, 0); color: black;"));
     connect(textColorButton, &QPushButton::clicked, this, &FragmentExportDialog::onTextColorClicked);
     colorsLayout->addWidget(textColorButton);
     
@@ -330,25 +237,13 @@ void FragmentExportDialog::setupUI()
 
 void FragmentExportDialog::loadDefaultSettings()
 {
-    updatingResolution = true;
-    
     // Dimensões originais
     widthSpinBox->setValue(originalWidth);
     heightSpinBox->setValue(originalHeight);
-    scalePercentSpinBox->setValue(100);
-    dpiSpinBox->setValue(600);
-    
-    updatingResolution = false;
     
     // Caminho padrão
-    // Sanitizar ID do fragmento (remover caracteres inválidos como {, }, -, etc)
-    QString sanitizedId = fragment->id.left(8);
-    sanitizedId.replace(QRegularExpression("[^a-zA-Z0-9]"), ""); // Manter apenas alfanuméricos
-    if (sanitizedId.isEmpty()) {
-        sanitizedId = "fragmento";
-    }
-    
-    QString suggestedName = QString("fragmento_%1_marcado.png").arg(sanitizedId);
+    QString suggestedName = QString("fragmento_%1_marcado.png")
+        .arg(fragment->id.left(8));
     QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     filePathEdit->setText(QDir(defaultPath).filePath(suggestedName));
     
@@ -360,42 +255,6 @@ void FragmentExportDialog::loadDefaultSettings()
         int fontSize = static_cast<int>(scale * 2.5);  // Aproximadamente 2.5mm
         fontSizeSpinBox->setValue(std::max(12, std::min(48, fontSize)));
     }
-    
-    // Configurações de visualização padrão
-    displaySettings.symbol = FingerprintEnhancer::MinutiaeSymbol::CIRCLE;
-    displaySettings.markerSize = markerSizeSpinBox->value();
-    displaySettings.labelFontSize = fontSizeSpinBox->value();
-    displaySettings.labelBackgroundColor = QColor(255, 255, 255, 200);
-    displaySettings.labelBackgroundOpacity = 200;
-    displaySettings.defaultLabelPosition = FingerprintEnhancer::MinutiaLabelPosition::RIGHT;
-    displaySettings.showLabelType = true;
-    displaySettings.showAngles = true;
-    
-    // Inicializar combos
-    symbolComboBox->setCurrentIndex(0);
-    labelPositionComboBox->setCurrentIndex(0);
-}
-
-void FragmentExportDialog::setDefaultExportPath(const QString& directory)
-{
-    // Usar diretório do projeto como base para exportação
-    if (directory.isEmpty()) {
-        return;
-    }
-    
-    // Sanitizar ID do fragmento
-    QString sanitizedId = fragment->id.left(8);
-    sanitizedId.replace(QRegularExpression("[^a-zA-Z0-9]"), "");
-    if (sanitizedId.isEmpty()) {
-        sanitizedId = "fragmento";
-    }
-    
-    // Criar nome sugerido baseado no fragmento
-    QString suggestedName = QString("fragmento_%1_marcado.png").arg(sanitizedId);
-    QString fullPath = QDir(directory).filePath(suggestedName);
-    
-    // Atualizar o campo de caminho
-    filePathEdit->setText(fullPath);
 }
 
 void FragmentExportDialog::onBrowseClicked()
@@ -409,20 +268,10 @@ void FragmentExportDialog::onBrowseClicked()
         default: filter = "Todos (*.*)"; break;
     }
     
-    // Usar caminho atual ou diretório do projeto como inicial
-    QString initialPath = filePathEdit->text();
-    if (initialPath.isEmpty() && !defaultExportDirectory.isEmpty()) {
-        QString sanitizedId = fragment->id.left(8);
-        sanitizedId.replace(QRegularExpression("[^a-zA-Z0-9]"), "");
-        if (sanitizedId.isEmpty()) sanitizedId = "fragmento";
-        QString suggestedName = QString("fragmento_%1_marcado.png").arg(sanitizedId);
-        initialPath = QDir(defaultExportDirectory).filePath(suggestedName);
-    }
-    
     QString fileName = QFileDialog::getSaveFileName(
         this,
         "Salvar Fragmento",
-        initialPath,
+        filePathEdit->text(),
         filter
     );
     
@@ -459,65 +308,6 @@ void FragmentExportDialog::onFormatChanged(int index)
 
 void FragmentExportDialog::onAnySettingChanged()
 {
-    updatePreview();
-}
-
-void FragmentExportDialog::onWidthChanged(int value)
-{
-    if (updatingResolution) return;
-    
-    updatingResolution = true;
-    
-    // Atualizar altura mantendo proporção se necessário
-    if (maintainAspectCheck->isChecked()) {
-        double aspectRatio = (double)originalHeight / originalWidth;
-        int newHeight = qRound(value * aspectRatio);
-        heightSpinBox->setValue(newHeight);
-    }
-    
-    // Atualizar percentual
-    int percent = qRound((double)value / originalWidth * 100.0);
-    scalePercentSpinBox->setValue(percent);
-    
-    updatingResolution = false;
-    updatePreview();
-}
-
-void FragmentExportDialog::onHeightChanged(int value)
-{
-    if (updatingResolution) return;
-    
-    updatingResolution = true;
-    
-    // Atualizar largura mantendo proporção se necessário
-    if (maintainAspectCheck->isChecked()) {
-        double aspectRatio = (double)originalWidth / originalHeight;
-        int newWidth = qRound(value * aspectRatio);
-        widthSpinBox->setValue(newWidth);
-    }
-    
-    // Atualizar percentual (baseado na largura)
-    int percent = qRound((double)widthSpinBox->value() / originalWidth * 100.0);
-    scalePercentSpinBox->setValue(percent);
-    
-    updatingResolution = false;
-    updatePreview();
-}
-
-void FragmentExportDialog::onScalePercentChanged(int value)
-{
-    if (updatingResolution) return;
-    
-    updatingResolution = true;
-    
-    // Calcular novas dimensões baseadas no percentual
-    int newWidth = qRound(originalWidth * value / 100.0);
-    int newHeight = qRound(originalHeight * value / 100.0);
-    
-    widthSpinBox->setValue(newWidth);
-    heightSpinBox->setValue(newHeight);
-    
-    updatingResolution = false;
     updatePreview();
 }
 
@@ -609,31 +399,12 @@ cv::Mat FragmentExportDialog::renderExportImage(int width, int height)
     // Desenhar minúcias se habilitado
     if (includeMinutiaeCheck->isChecked() && !fragment->minutiae.empty()) {
         double scaleFactor = (double)width / originalWidth;
-        
-        // Atualizar configurações de exibição
-        displaySettings.markerSize = markerSizeSpinBox->value();
-        displaySettings.labelFontSize = fontSizeSpinBox->value();
-        displaySettings.symbol = static_cast<FingerprintEnhancer::MinutiaeSymbol>(
-            symbolComboBox->currentData().toInt());
-        displaySettings.defaultLabelPosition = static_cast<FingerprintEnhancer::MinutiaLabelPosition>(
-            labelPositionComboBox->currentData().toInt());
-        displaySettings.showLabelType = showLabelTypeCheck->isChecked();
-        displaySettings.showAngles = showAnglesCheck->isChecked();
-        
-        int markerRadius = displaySettings.markerSize * scaleFactor / 2;
-        double fontSize = displaySettings.labelFontSize * scaleFactor / 30.0;
+        int markerRadius = markerSizeSpinBox->value() * scaleFactor / 2;
+        double fontSize = fontSizeSpinBox->value() * scaleFactor / 30.0;
         int fontThickness = std::max(1, (int)(markerRadius / 8.0));
         
         cv::Scalar markerColorCV(markerColor.blue(), markerColor.green(), markerColor.red());
         cv::Scalar textColorCV(textColor.blue(), textColor.green(), textColor.red());
-        cv::Scalar labelBgColorCV(
-            labelBgColor.blue(), 
-            labelBgColor.green(), 
-            labelBgColor.red(), 
-            displaySettings.labelBackgroundOpacity
-        );
-        
-        int lineWidth = lineWidthSpinBox->value();
         
         for (int i = 0; i < fragment->minutiae.size(); ++i) {
             const auto& m = fragment->minutiae[i];
@@ -642,214 +413,67 @@ cv::Mat FragmentExportDialog::renderExportImage(int width, int height)
                 (int)(m.position.y() * scaleFactor)
             );
             
-            // Desenhar símbolo da minúcia com largura configurável
-            drawMinutiaSymbol(result, center, markerRadius, m.angle, markerColorCV, lineWidth);
+            // Desenhar círculo
+            cv::circle(result, center, markerRadius, markerColorCV, 2, cv::LINE_AA);
             
-            // Desenhar ângulo adicional se habilitado
-            if (displaySettings.showAngles && 
-                displaySettings.symbol != FingerprintEnhancer::MinutiaeSymbol::CIRCLE_ARROW) {
+            // Desenhar linha de direção
+            if (showDirectionsCheck->isChecked()) {
                 double angle = m.angle * M_PI / 180.0;
-                int lineLength = markerRadius * 2;
+                int lineLength = markerRadius + markerRadius / 2;
                 cv::Point endPoint(
                     center.x + (int)(lineLength * std::cos(angle)),
-                    center.y - (int)(lineLength * std::sin(angle))
+                    center.y + (int)(lineLength * std::sin(angle))
                 );
-                cv::line(result, center, endPoint, markerColorCV, lineWidth, cv::LINE_AA);
+                cv::line(result, center, endPoint, markerColorCV, 2, cv::LINE_AA);
             }
             
-            // Desenhar rótulo baseado nas configurações
-            FingerprintEnhancer::MinutiaLabelPosition labelPos = displaySettings.defaultLabelPosition;
+            // Desenhar rótulo
+            QString label;
+            if (showNumbersCheck->isChecked() && showTypesCheck->isChecked()) {
+                label = QString("%1-%2").arg(i + 1).arg(m.getTypeAbbreviation());
+            } else if (showNumbersCheck->isChecked()) {
+                label = QString::number(i + 1);
+            } else if (showTypesCheck->isChecked()) {
+                label = m.getTypeAbbreviation();
+            }
             
-            if (labelPos != FingerprintEnhancer::MinutiaLabelPosition::HIDDEN) {
-                QString numberLabel;
-                QString typeLabel;
+            if (!label.isEmpty()) {
+                int textOffsetY = markerRadius + (int)(fontSize * 35);
+                cv::Point textPos(center.x - markerRadius / 2, center.y - textOffsetY);
                 
-                if (showNumbersCheck->isChecked()) {
-                    numberLabel = QString(" %1 ").arg(i + 1);
+                // Fundo do texto
+                cv::Size textSize = cv::getTextSize(
+                    label.toStdString(),
+                    cv::FONT_HERSHEY_SIMPLEX,
+                    fontSize,
+                    fontThickness,
+                    nullptr
+                );
+                
+                cv::Rect textBg(
+                    std::max(0, textPos.x - 2),
+                    std::max(0, textPos.y - textSize.height - 2),
+                    std::min(textSize.width + 4, result.cols - textPos.x + 2),
+                    textSize.height + 4
+                );
+                
+                if (textBg.x + textBg.width <= result.cols && 
+                    textBg.y + textBg.height <= result.rows &&
+                    textBg.width > 0 && textBg.height > 0) {
+                    cv::Mat roi = result(textBg);
+                    cv::Mat bgColor(textBg.size(), result.type(), cv::Scalar(0, 0, 0));
+                    cv::addWeighted(roi, 0.6, bgColor, 0.4, 0, roi);
                 }
                 
-                if (showLabelTypeCheck->isChecked()) {
-                    typeLabel = QString(" %1 ").arg(m.getTypeAbbreviation());
-                }
-                
-                drawMinutiaLabels(result, center, numberLabel, typeLabel, labelPos,
-                                markerRadius, fontSize, fontThickness, 
-                                textColorCV, labelBgColorCV, scaleFactor);
+                // Texto
+                cv::putText(result, label.toStdString(), textPos,
+                           cv::FONT_HERSHEY_SIMPLEX, fontSize,
+                           textColorCV, fontThickness, cv::LINE_AA);
             }
         }
     }
     
     return result;
-}
-
-void FragmentExportDialog::drawMinutiaSymbol(cv::Mat& img, const cv::Point& center, 
-                                             int radius, float angle, const cv::Scalar& color, int lineWidth)
-{
-    using MS = FingerprintEnhancer::MinutiaeSymbol;
-    MS symbol = static_cast<MS>(symbolComboBox->currentData().toInt());
-    
-    switch (symbol) {
-        case MS::CIRCLE:
-            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
-            break;
-            
-        case MS::CIRCLE_X: {
-            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
-            int offset = radius / 2;
-            cv::line(img, cv::Point(center.x - offset, center.y - offset),
-                    cv::Point(center.x + offset, center.y + offset), color, lineWidth, cv::LINE_AA);
-            cv::line(img, cv::Point(center.x - offset, center.y + offset),
-                    cv::Point(center.x + offset, center.y - offset), color, lineWidth, cv::LINE_AA);
-            break;
-        }
-        
-        case MS::CIRCLE_ARROW: {
-            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
-            double rad = angle * M_PI / 180.0;
-            int arrowLen = radius * 1.5;
-            cv::Point endPt(center.x + (int)(arrowLen * std::cos(rad)),
-                           center.y - (int)(arrowLen * std::sin(rad)));
-            cv::line(img, center, endPt, color, lineWidth, cv::LINE_AA);
-            // Pontas da seta
-            int headSize = radius / 3;
-            double angle1 = rad + M_PI * 3.0 / 4.0;
-            double angle2 = rad - M_PI * 3.0 / 4.0;
-            cv::Point head1(endPt.x + (int)(headSize * std::cos(angle1)),
-                          endPt.y - (int)(headSize * std::sin(angle1)));
-            cv::Point head2(endPt.x + (int)(headSize * std::cos(angle2)),
-                          endPt.y - (int)(headSize * std::sin(angle2)));
-            cv::line(img, endPt, head1, color, lineWidth, cv::LINE_AA);
-            cv::line(img, endPt, head2, color, lineWidth, cv::LINE_AA);
-            break;
-        }
-        
-        case MS::CIRCLE_CROSS: {
-            cv::circle(img, center, radius, color, lineWidth, cv::LINE_AA);
-            int offset = radius / 2;
-            cv::line(img, cv::Point(center.x - offset, center.y),
-                    cv::Point(center.x + offset, center.y), color, lineWidth, cv::LINE_AA);
-            cv::line(img, cv::Point(center.x, center.y - offset),
-                    cv::Point(center.x, center.y + offset), color, lineWidth, cv::LINE_AA);
-            break;
-        }
-        
-        case MS::TRIANGLE: {
-            int h = radius;
-            std::vector<cv::Point> pts = {
-                cv::Point(center.x, center.y - h),
-                cv::Point(center.x - h, center.y + h/2),
-                cv::Point(center.x + h, center.y + h/2)
-            };
-            cv::polylines(img, pts, true, color, 2, cv::LINE_AA);
-            break;
-        }
-        
-        case MS::SQUARE: {
-            cv::Rect rect(center.x - radius, center.y - radius, radius * 2, radius * 2);
-            cv::rectangle(img, rect, color, 2, cv::LINE_AA);
-            break;
-        }
-        
-        case MS::DIAMOND: {
-            std::vector<cv::Point> pts = {
-                cv::Point(center.x, center.y - radius),
-                cv::Point(center.x + radius, center.y),
-                cv::Point(center.x, center.y + radius),
-                cv::Point(center.x - radius, center.y)
-            };
-            cv::polylines(img, pts, true, color, 2, cv::LINE_AA);
-            break;
-        }
-    }
-}
-
-void FragmentExportDialog::drawMinutiaLabels(cv::Mat& img, const cv::Point& center,
-                                             const QString& numberLabel, const QString& typeLabel,
-                                             FingerprintEnhancer::MinutiaLabelPosition labelPos,
-                                             int markerRadius, double fontSize, int fontThickness,
-                                             const cv::Scalar& textColor, const cv::Scalar& bgColor,
-                                             double scaleFactor)
-{
-    using MLP = FingerprintEnhancer::MinutiaLabelPosition;
-    int margin = 5 * scaleFactor;
-    
-    // Desenhar número
-    if (!numberLabel.isEmpty()) {
-        cv::Size textSize = cv::getTextSize(numberLabel.toStdString(),
-                                           cv::FONT_HERSHEY_SIMPLEX, fontSize,
-                                           fontThickness, nullptr);
-        cv::Point textPos;
-        
-        switch (labelPos) {
-            case MLP::RIGHT:
-                textPos = cv::Point(center.x + markerRadius + margin, 
-                                  center.y - markerRadius);
-                break;
-            case MLP::LEFT:
-                textPos = cv::Point(center.x - markerRadius - margin - textSize.width,
-                                  center.y - markerRadius);
-                break;
-            case MLP::ABOVE:
-                textPos = cv::Point(center.x - textSize.width / 2,
-                                  center.y - markerRadius - margin - textSize.height);
-                break;
-            case MLP::BELOW:
-                textPos = cv::Point(center.x - textSize.width / 2,
-                                  center.y + markerRadius + margin + textSize.height);
-                break;
-            default:
-                return;
-        }
-        
-        // Desenhar fundo com opacidade
-        cv::Rect textBg(textPos.x - 2, textPos.y - textSize.height - 2,
-                       textSize.width + 4, textSize.height + 4);
-        if (textBg.x >= 0 && textBg.y >= 0 &&
-            textBg.x + textBg.width < img.cols && 
-            textBg.y + textBg.height < img.rows) {
-            cv::Mat roi = img(textBg);
-            cv::Mat overlay = roi.clone();
-            cv::rectangle(overlay, cv::Point(0, 0), 
-                        cv::Point(overlay.cols, overlay.rows),
-                        bgColor, cv::FILLED);
-            double alpha = displaySettings.labelBackgroundOpacity / 255.0;
-            cv::addWeighted(overlay, alpha, roi, 1.0 - alpha, 0, roi);
-        }
-        
-        // Desenhar texto
-        cv::putText(img, numberLabel.toStdString(), textPos,
-                   cv::FONT_HERSHEY_SIMPLEX, fontSize, textColor,
-                   fontThickness, cv::LINE_AA);
-        
-        // Desenhar tipo abaixo do número (se houver)
-        if (!typeLabel.isEmpty()) {
-            cv::Size typeSize = cv::getTextSize(typeLabel.toStdString(),
-                                               cv::FONT_HERSHEY_SIMPLEX, fontSize,
-                                               fontThickness, nullptr);
-            cv::Point typePos = textPos;
-            typePos.y += textSize.height + 5;
-            
-            // Fundo do tipo
-            cv::Rect typeBg(typePos.x - 2, typePos.y - typeSize.height - 2,
-                           typeSize.width + 4, typeSize.height + 4);
-            if (typeBg.x >= 0 && typeBg.y >= 0 &&
-                typeBg.x + typeBg.width < img.cols && 
-                typeBg.y + typeBg.height < img.rows) {
-                cv::Mat roi = img(typeBg);
-                cv::Mat overlay = roi.clone();
-                cv::rectangle(overlay, cv::Point(0, 0), 
-                            cv::Point(overlay.cols, overlay.rows),
-                            bgColor, cv::FILLED);
-                double alpha = displaySettings.labelBackgroundOpacity / 255.0;
-                cv::addWeighted(overlay, alpha, roi, 1.0 - alpha, 0, roi);
-            }
-            
-            // Texto do tipo
-            cv::putText(img, typeLabel.toStdString(), typePos,
-                       cv::FONT_HERSHEY_SIMPLEX, fontSize, textColor,
-                       fontThickness, cv::LINE_AA);
-        }
-    }
 }
 
 QPixmap FragmentExportDialog::cvMatToQPixmap(const cv::Mat& mat)
@@ -906,32 +530,19 @@ void FragmentExportDialog::onTextColorClicked()
 void FragmentExportDialog::onResetToDefaults()
 {
     loadDefaultSettings();
+    markerColor = QColor(0, 255, 0);
+    textColor = QColor(255, 255, 0);
+    markerColorButton->setStyleSheet("background-color: rgb(0, 255, 0); color: black;");
+    textColorButton->setStyleSheet("background-color: rgb(255, 255, 0); color: black;");
     
-    // Cores
-    markerColor = QColor(255, 0, 0);
-    textColor = QColor(255, 0, 0);
-    labelBgColor = QColor(255, 255, 255);
-    markerColorButton->setStyleSheet("background-color: rgb(255, 0, 0); color: white;");
-    textColorButton->setStyleSheet("background-color: rgb(255, 0, 0); color: white;");
-    labelBgColorButton->setStyleSheet("background-color: rgb(255, 255, 255); color: black;");
-    
-    // Tamanhos
-    markerSizeSpinBox->setValue(30);
-    fontSizeSpinBox->setValue(26);
-    
-    // Checkboxes
     includeMinutiaeCheck->setChecked(true);
     showNumbersCheck->setChecked(true);
-    showLabelTypeCheck->setChecked(true);
-    showAnglesCheck->setChecked(true);
+    showTypesCheck->setChecked(true);
+    showDirectionsCheck->setChecked(true);
     maintainAspectCheck->setChecked(true);
     
-    // Formato
     formatComboBox->setCurrentIndex(0);  // PNG
-    qualitySlider->setValue(97);
-    
-    // Opacidade
-    labelOpacitySlider->setValue(200);
+    qualitySlider->setValue(95);
     
     updatePreview();
 }
@@ -944,57 +555,5 @@ QString FragmentExportDialog::getFormat() const
         case 2: return "TIFF";
         case 3: return "BMP";
         default: return "PNG";
-    }
-}
-
-bool FragmentExportDialog::exportImage(QString& errorMessage)
-{
-    QString filePath = filePathEdit->text();
-    
-    if (filePath.isEmpty()) {
-        errorMessage = "Caminho do arquivo não especificado";
-        return false;
-    }
-    
-    try {
-        // Renderizar imagem na resolução final
-        int width = widthSpinBox->value();
-        int height = heightSpinBox->value();
-        
-        cv::Mat finalImage = renderExportImage(width, height);
-        
-        if (finalImage.empty()) {
-            errorMessage = "Erro ao renderizar imagem";
-            return false;
-        }
-        
-        // Preparar parâmetros de salvamento
-        std::vector<int> params;
-        
-        int formatIdx = formatComboBox->currentIndex();
-        if (formatIdx == 1) {  // JPEG
-            params.push_back(cv::IMWRITE_JPEG_QUALITY);
-            params.push_back(qualitySlider->value());
-        } else if (formatIdx == 0) {  // PNG
-            params.push_back(cv::IMWRITE_PNG_COMPRESSION);
-            params.push_back(9);  // Máxima compressão
-        }
-        
-        // Salvar imagem
-        bool success = cv::imwrite(filePath.toStdString(), finalImage, params);
-        
-        if (!success) {
-            errorMessage = "Falha ao salvar arquivo. Verifique as permissões e o caminho.";
-            return false;
-        }
-        
-        return true;
-        
-    } catch (const cv::Exception& e) {
-        errorMessage = QString("Erro OpenCV: %1").arg(e.what());
-        return false;
-    } catch (const std::exception& e) {
-        errorMessage = QString("Erro: %1").arg(e.what());
-        return false;
     }
 }

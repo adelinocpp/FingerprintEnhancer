@@ -248,6 +248,7 @@ QRect CropTool::getHandleRect(const QPoint &center, double scaleFactor) const {
 
 void CropTool::moveSelection(const QPoint &delta) {
     selectionRect.translate(delta);
+    selectionRect = constrainToImageBounds(selectionRect);
 }
 
 void CropTool::resizeSelection(const QPoint &delta, State resizeState) {
@@ -285,7 +286,7 @@ void CropTool::resizeSelection(const QPoint &delta, State resizeState) {
     // Validar tamanho mínimo
     newRect = newRect.normalized();
     if (newRect.width() >= 10 && newRect.height() >= 10) {
-        selectionRect = newRect;
+        selectionRect = constrainToImageBounds(newRect);
     }
 }
 
@@ -343,4 +344,22 @@ bool CropTool::handleKeyPress(QKeyEvent *event) {
         }
     }
     return false;
+}
+
+QRect CropTool::constrainToImageBounds(const QRect &rect) const {
+    if (imageSize.isEmpty()) {
+        return rect;  // Sem limites definidos
+    }
+    
+    // Limitar cada canto do retângulo aos limites da imagem
+    int left = qMax(0, rect.left());
+    int top = qMax(0, rect.top());
+    int right = qMin(imageSize.width() - 1, rect.right());
+    int bottom = qMin(imageSize.height() - 1, rect.bottom());
+    
+    // Garantir que o retângulo ainda é válido
+    if (right < left) right = left;
+    if (bottom < top) bottom = top;
+    
+    return QRect(QPoint(left, top), QPoint(right, bottom));
 }

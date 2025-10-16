@@ -259,6 +259,12 @@ private slots:
     void loadCurrentEntityToView();
     cv::Mat& getCurrentWorkingImage();  // Retorna referência para workingImage da entidade corrente
     void applyOperationToCurrentEntity(std::function<void(cv::Mat&)> operation);
+    
+    // Funções auxiliares para conversão de coordenadas com rotação
+    QRect convertRotatedToOriginalCoords(const QRect& rotatedRect, double currentAngle, 
+                                         const QSize& currentSize, const QSize& originalSize);
+    QRect convertOriginalToRotatedCoords(const QRect& originalRect, double currentAngle,
+                                         const QSize& originalSize, const QSize& currentSize);
 
     // Gerenciamento de painéis duais
     void switchActivePanel();
@@ -391,6 +397,10 @@ private:
     QLabel *statusLabel;
     QLabel *imageInfoLabel;
     QLabel *scaleLabel;
+    
+    // Ações da toolbar (para habilitar/desabilitar durante rotação)
+    QAction *switchPanelAction;
+    QAction *toggleRightPanelAction;
     QProgressBar *progressBar;
     
     // Actions para sincronização
