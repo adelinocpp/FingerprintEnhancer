@@ -14,139 +14,164 @@ Language set to: pt_BR
 [INFO] Application started successfully
 [OPEN_PROJECT] Projeto aberto - atualizando painéis
 [OPEN_PROJECT] Concluído - painéis atualizados
+[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!
+[OVERLAY] MinutiaeOverlay construído - contextMenuPolicy configurado!
+[DISPLAY] Exibindo fragmento {dc901dad-d989-4410-878c-506d38b6d738} com 1 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[ROTATION] Rotacionando IMAGEM - fragmentOverlay: 0x561b01a635e0
-[ROTATION] Dialog criado - tem fragmentOverlay: SIM
-[ROTATION] Rotacionando para 0,0 graus (ângulo acumulado: 0,0)
-[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)
-[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)
-[ROTATION] Atualizando overlay: currentAngle=0,0 + deltaAngle=0,0 = previewAngle=0,0
-[ROTATION] Desabilitando árvore de projeto e controles de painel
-[ROTATION] Rotacionando para 3,0 graus (ângulo acumulado: 3,0)
-[ROTATION] rotateImage: 3,0 graus, canais=4, transparente=NAO
-[ROTATION] Imagem rotacionada: canais=4, tamanho=3571x2481
-[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)
-[ROTATION] Atualizando overlay: currentAngle=0,0 + deltaAngle=3,0 = previewAngle=3,0
-[ROTATION] Rotacionando para 3,0 graus (ângulo acumulado: 3,0)
-[ROTATION] rotateImage: 3,0 graus, canais=4, transparente=NAO
-[ROTATION] Imagem rotacionada: canais=4, tamanho=3571x2481
-[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)
-[ROTATION] Atualizando overlay: currentAngle=0,0 + deltaAngle=3,0 = previewAngle=3,0
-[ROTATION] Limpando preview de rotação do overlay ao aceitar
-[ROTATION] Imagem rotacionada 3,0 graus - ângulo acumulado: 3,0
-[ROTATION] Reabilitando árvore de projeto e controles de painel
-[ROTATION] Rotacionando IMAGEM - fragmentOverlay: 0x561b01a635e0
-[ROTATION] Dialog criado - tem fragmentOverlay: SIM
-[ROTATION] Rotacionando para 0,0 graus (ângulo acumulado: 3,0)
-[ROTATION] rotateImage: 0,0 graus (~0°) - retornando imagem ORIGINAL (sem borda)
-[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)
-[ROTATION] Atualizando overlay: currentAngle=3,0 + deltaAngle=0,0 = previewAngle=3,0
-[ROTATION] Desabilitando árvore de projeto e controles de painel
-[ROTATION] Rotacionando para -3,0 graus (ângulo acumulado: 0,0)
-[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)
-[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)
-[ROTATION] Atualizando overlay: currentAngle=3,0 + deltaAngle=-3,0 = previewAngle=0,0
-[ROTATION] Rotacionando para -3,0 graus (ângulo acumulado: 0,0)
-[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)
-[VIEWER] Convertendo BGRA → RGBA (PNG com alpha)
-[ROTATION] Atualizando overlay: currentAngle=3,0 + deltaAngle=-3,0 = previewAngle=0,0
-[ROTATION] Limpando preview de rotação do overlay ao aceitar
-[ROTATION] Ângulo acumulado ~0° - restaurando imagem ORIGINAL (sem borda)
-[ROTATION] Reabilitando árvore de projeto e controles de painel
-[ROTATION] Rotacionando IMAGEM - fragmentOverlay: 0x561b01a635e0
-[ROTATION] Dialog criado - tem fragmentOverlay: SIM
-[ROTATION] Rotacionando para 0,0 graus (ângulo acumulado: 0,0)
-[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=0,0 + deltaAngle=0,0 = previewAngle=0,0
-[ROTATION] Desabilitando árvore de projeto e controles de painel
-[ROTATION] Rotacionando para 1,0 graus (ângulo acumulado: 1,0)
-[ROTATION] rotateImage: 1,0 graus, canais=3, transparente=NAO
-[ROTATION] Imagem rotacionada: canais=3, tamanho=4051x3069
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=0,0 + deltaAngle=1,0 = previewAngle=1,0
-[ROTATION] Rotacionando para 13,0 graus (ângulo acumulado: 13,0)
-[ROTATION] rotateImage: 13,0 graus, canais=3, transparente=NAO
-[ROTATION] Imagem rotacionada: canais=3, tamanho=4572x3822
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=0,0 + deltaAngle=13,0 = previewAngle=13,0
-[ROTATION] Limpando preview de rotação do overlay ao aceitar
-[ROTATION] Imagem rotacionada 13,0 graus - ângulo acumulado: 13,0
-[ROTATION] Reabilitando árvore de projeto e controles de painel
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Exibindo fragmento {dc901dad-d989-4410-878c-506d38b6d738} com 1 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Exibindo fragmento {f6b9a653-3f56-43ac-97ef-94ec411b17c3} com 10 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,37
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,37
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,37
+[DISPLAY] Exibindo fragmento {c6f0a562-36fb-4762-a877-543bd528a911} com 11 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,74
+[DISPLAY] Exibindo fragmento {c497cc21-d6ef-41c6-96fe-60bd29366c34} com 11 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,43
+
+[COMPARISON] ========== INICIANDO COMPARAÇÃO ==========
+[COMPARISON] Fragmento 1: {c497cc21-d6ef-41c6-96fe-60bd29366c34} (11 minúcias)
+[COMPARISON] Fragmento 2: {c6f0a562-36fb-4762-a877-543bd528a911} (11 minúcias)
+[COMPARISON] Configurações:
+[COMPARISON]   - Tolerância posição: 15,0 pixels
+[COMPARISON]   - Tolerância ângulo: 0,300 rad (17,2°)
+[COMPARISON]   - Score mínimo: 0,50
+[COMPARISON]   - Usar tipo: NÃO
+[COMPARISON]   - Usar qualidade: NÃO
+[COMPARISON] ==============================================
+
+
+[AFIS-LR] ========== INÍCIO DO MATCHING ==========
+[AFIS-LR] Minúcias fragmento 1: 11
+[AFIS-LR] Minúcias fragmento 2: 11
+[AFIS-LR] Tolerância posição: 15,0 pixels
+[AFIS-LR] Tolerância ângulo: 0,300 radianos (17,2 graus)
+[AFIS-LR] Score mínimo: 0,50
+
+[AFIS-LR] Minúcia 1[0]: pos=(521,770), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[1]: pos=(517,802), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[2]: pos=(615,847), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[3]: pos=(680,786), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[4]: pos=(711,1021), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[5]: pos=(708,989), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[6]: pos=(788,904), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[7]: pos=(834,942), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[8]: pos=(808,815), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[9]: pos=(654,1063), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[10]: pos=(603,1092), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] TOTAL DE CORRESPONDÊNCIAS: 0
+[AFIS-LR] ========== FIM DO MATCHING ==========
+
+
+[AFIS-LR] ========== CÁLCULO DE LIKELIHOOD RATIO ==========
+[AFIS-LR] Número de correspondências: 0
+[AFIS-LR] Nenhuma correspondência - LR = 1e-10
+[AFIS-LR] ========================================
+
+[DISPLAY] Exibindo fragmento {c6f0a562-36fb-4762-a877-543bd528a911} com 11 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Exibindo fragmento {c497cc21-d6ef-41c6-96fe-60bd29366c34} com 11 minúcias
+[VIEWER] Convertendo GRAY → RGB
 [OVERLAY] setEditMode(false) - Overlay agora IGNORA eventos de mouse
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=13,0 (preview=NAO)
-[OVERLAY] calculateRotatedPolygon: angle=13,0°, original=4000x3000, rotated=4572x3822
-[OVERLAY]   Matriz: [0,9744 -0,2250 674,7; 0,2250 0,9744 -0,5]
-[OVERLAY]   Canto[0]: (2236,0,1664,0) → (2479,1,2123,9)
-[OVERLAY]   Canto[1]: (3209,0,1664,0) → (3427,1,2342,8)
-[OVERLAY]   Canto[2]: (3209,0,2690,0) → (3196,3,3342,5)
-[OVERLAY]   Canto[3]: (2236,0,2690,0) → (2248,3,3123,6)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=13,0 (preview=NAO)
-[OVERLAY] calculateRotatedPolygon: angle=13,0°, original=4000x3000, rotated=4572x3822
-[OVERLAY]   Matriz: [0,9744 -0,2250 674,7; 0,2250 0,9744 -0,5]
-[OVERLAY]   Canto[0]: (2236,0,1664,0) → (2479,1,2123,9)
-[OVERLAY]   Canto[1]: (3209,0,1664,0) → (3427,1,2342,8)
-[OVERLAY]   Canto[2]: (3209,0,2690,0) → (3196,3,3342,5)
-[OVERLAY]   Canto[3]: (2236,0,2690,0) → (2248,3,3123,6)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=13,0 (preview=NAO)
-[OVERLAY] calculateRotatedPolygon: angle=13,0°, original=4000x3000, rotated=4572x3822
-[OVERLAY]   Matriz: [0,9744 -0,2250 674,7; 0,2250 0,9744 -0,5]
-[OVERLAY]   Canto[0]: (2236,0,1664,0) → (2479,1,2123,9)
-[OVERLAY]   Canto[1]: (3209,0,1664,0) → (3427,1,2342,8)
-[OVERLAY]   Canto[2]: (3209,0,2690,0) → (3196,3,3342,5)
-[OVERLAY]   Canto[3]: (2236,0,2690,0) → (2248,3,3123,6)
-[ROTATION] Rotacionando IMAGEM - fragmentOverlay: 0x561b01a635e0
-[ROTATION] Dialog criado - tem fragmentOverlay: SIM
-[ROTATION] Rotacionando para 0,0 graus (ângulo acumulado: 13,0)
-[ROTATION] rotateImage: 0,0 graus (~0°) - retornando imagem ORIGINAL (sem borda)
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=13,0 + deltaAngle=0,0 = previewAngle=13,0
-[ROTATION] Desabilitando árvore de projeto e controles de painel
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=13,0 (preview=SIM)
-[OVERLAY] calculateRotatedPolygon: angle=13,0°, original=4000x3000, rotated=4572x3822
-[OVERLAY]   Matriz: [0,9744 -0,2250 674,7; 0,2250 0,9744 -0,5]
-[OVERLAY]   Canto[0]: (2236,0,1664,0) → (2479,1,2123,9)
-[OVERLAY]   Canto[1]: (3209,0,1664,0) → (3427,1,2342,8)
-[OVERLAY]   Canto[2]: (3209,0,2690,0) → (3196,3,3342,5)
-[OVERLAY]   Canto[3]: (2236,0,2690,0) → (2248,3,3123,6)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=13,0 (preview=SIM)
-[OVERLAY] calculateRotatedPolygon: angle=13,0°, original=4000x3000, rotated=4572x3822
-[OVERLAY]   Matriz: [0,9744 -0,2250 674,7; 0,2250 0,9744 -0,5]
-[OVERLAY]   Canto[0]: (2236,0,1664,0) → (2479,1,2123,9)
-[OVERLAY]   Canto[1]: (3209,0,1664,0) → (3427,1,2342,8)
-[OVERLAY]   Canto[2]: (3209,0,2690,0) → (3196,3,3342,5)
-[OVERLAY]   Canto[3]: (2236,0,2690,0) → (2248,3,3123,6)
-[ROTATION] Rotacionando para -1,0 graus (ângulo acumulado: 12,0)
-[ROTATION] rotateImage: -1,0 graus, canais=3, transparente=NAO
-[ROTATION] Imagem rotacionada: canais=3, tamanho=4638x3901
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=13,0 + deltaAngle=-1,0 = previewAngle=12,0
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=12,0 (preview=SIM)
-[OVERLAY] calculateRotatedPolygon: angle=12,0°, original=4000x3000, rotated=4536x3766
-[OVERLAY]   Matriz: [0,9781 -0,2079 623,6; 0,2079 0,9781 -0,0]
-[OVERLAY]   Canto[0]: (2236,0,1664,0) → (2464,7,2092,5)
-[OVERLAY]   Canto[1]: (3209,0,1664,0) → (3416,5,2294,8)
-[OVERLAY]   Canto[2]: (3209,0,2690,0) → (3203,2,3298,4)
-[OVERLAY]   Canto[3]: (2236,0,2690,0) → (2251,4,3096,1)
-[ROTATION] Rotacionando para -13,0 graus (ângulo acumulado: 0,0)
-[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=13,0 + deltaAngle=-13,0 = previewAngle=0,0
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=0,0 (preview=SIM)
-[ROTATION] Rotacionando para -13,0 graus (ângulo acumulado: 0,0)
-[ROTATION] Ângulo acumulado ~0° - usando imagem REALMENTE ORIGINAL (sem borda)
-[VIEWER] Convertendo BGR → RGB
-[ROTATION] Atualizando overlay: currentAngle=13,0 + deltaAngle=-13,0 = previewAngle=0,0
-[ROTATION] Limpando preview de rotação do overlay ao aceitar
-[ROTATION] Ângulo acumulado ~0° - restaurando imagem ORIGINAL (sem borda)
-[ROTATION] Reabilitando árvore de projeto e controles de painel
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=0,0 (preview=NAO)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=0,0 (preview=NAO)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=0,0 (preview=NAO)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=0,0 (preview=NAO)
-[OVERLAY] Desenhando fragmento 1: sourceRect=[2236,1664 974x1027], ângulo=0,0 (preview=NAO)
+[DISPLAY] Fragmento exibido com sucesso
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,74
+[DISPLAY] Overlay atualizado: geometry=484x755, scale=0,43
+
+[COMPARISON] ========== INICIANDO COMPARAÇÃO ==========
+[COMPARISON] Fragmento 1: {c6f0a562-36fb-4762-a877-543bd528a911} (11 minúcias)
+[COMPARISON] Fragmento 2: {c497cc21-d6ef-41c6-96fe-60bd29366c34} (11 minúcias)
+[COMPARISON] Configurações:
+[COMPARISON]   - Tolerância posição: 15,0 pixels
+[COMPARISON]   - Tolerância ângulo: 0,300 rad (17,2°)
+[COMPARISON]   - Score mínimo: 0,50
+[COMPARISON]   - Usar tipo: NÃO
+[COMPARISON]   - Usar qualidade: NÃO
+[COMPARISON] ==============================================
+
+
+[AFIS-LR] ========== INÍCIO DO MATCHING ==========
+[AFIS-LR] Minúcias fragmento 1: 11
+[AFIS-LR] Minúcias fragmento 2: 11
+[AFIS-LR] Tolerância posição: 15,0 pixels
+[AFIS-LR] Tolerância ângulo: 0,300 radianos (17,2 graus)
+[AFIS-LR] Score mínimo: 0,50
+
+[AFIS-LR] Minúcia 1[0]: pos=(298,291), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[1]: pos=(297,302), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[2]: pos=(335,321), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[3]: pos=(355,288), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[4]: pos=(375,386), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[5]: pos=(376,374), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[6]: pos=(401,342), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[7]: pos=(422,361), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[8]: pos=(405,304), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[9]: pos=(352,409), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] Minúcia 1[10]: pos=(338,420), ângulo=0,00 rad, tipo=55
+  [AFIS-LR] ✗ SEM MATCH (candidatos=0, bestScore=-1,000)
+
+[AFIS-LR] TOTAL DE CORRESPONDÊNCIAS: 0
+[AFIS-LR] ========== FIM DO MATCHING ==========
+
+
+[AFIS-LR] ========== CÁLCULO DE LIKELIHOOD RATIO ==========
+[AFIS-LR] Número de correspondências: 0
+[AFIS-LR] Nenhuma correspondência - LR = 1e-10
+[AFIS-LR] ========================================
+

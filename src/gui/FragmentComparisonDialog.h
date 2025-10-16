@@ -13,8 +13,14 @@
 #include <QFutureWatcher>
 #include "../core/ProjectModel.h"
 #include "../core/MinutiaeTypes.h"
+#include "../afis/AFISLikelihoodCalculator.h"
 #include "ImageViewer.h"
 #include "MinutiaeOverlay.h"
+
+namespace FingerprintEnhancer {
+    class Fragment;
+    class Minutia;
+}
 
 /**
  * @brief Resultado da comparação 1:1 entre fragmentos
@@ -76,11 +82,18 @@ private:
     QPushButton* closeButton;
     QProgressBar* progressBar;
     
+    // Campos de configuração
+    QDoubleSpinBox* positionToleranceSpinBox;
+    QDoubleSpinBox* angleToleranceSpinBox;
+    QDoubleSpinBox* minScoreSpinBox;
+    QCheckBox* useTypeWeightingCheckBox;
+    QCheckBox* useQualityWeightingCheckBox;
+    
     // Viewers para exibição lado a lado
     ImageViewer* viewer1;
     ImageViewer* viewer2;
-    MinutiaeOverlay* overlay1;
-    MinutiaeOverlay* overlay2;
+    FingerprintEnhancer::MinutiaeOverlay* overlay1;
+    FingerprintEnhancer::MinutiaeOverlay* overlay2;
     
     // Labels de resultado
     QLabel* resultLikelihoodLabel;
@@ -104,31 +117,16 @@ private:
     void loadFragmentsList();
     void displayFragment(FingerprintEnhancer::Fragment* fragment,
                         ImageViewer* viewer,
-                        MinutiaeOverlay* overlay);
+                        FingerprintEnhancer::MinutiaeOverlay* overlay);
     void clearResults();
     void displayResults(const FragmentComparisonResult& result);
-    QString getInterpretationText(double logLR);
+    static QString getInterpretationText(double logLR);
     
     // Algoritmo de comparação (executado em thread)
     static FragmentComparisonResult compareFragments(
-        const QVector<MinutiaeData>& minutiae1,
-        const QVector<MinutiaeData>& minutiae2);
-    
-    // Métodos de cálculo (baseados nos papers)
-    static double calculateLikelihoodRatio(
-        const QVector<MinutiaeData>& minutiae1,
-        const QVector<MinutiaeData>& minutiae2,
-        const QVector<QPair<int, int>>& correspondences);
-    
-    static QVector<QPair<int, int>> findCorrespondences(
-        const QVector<MinutiaeData>& minutiae1,
-        const QVector<MinutiaeData>& minutiae2,
-        double positionTolerance = 15.0,
-        double angleTolerance = 0.3);
-    
-    static double computeLocalSimilarity(
-        const MinutiaeData& m1,
-        const MinutiaeData& m2);
+        const QVector<FingerprintEnhancer::Minutia>& minutiae1,
+        const QVector<FingerprintEnhancer::Minutia>& minutiae2,
+        const AFISLikelihoodConfig& config = AFISLikelihoodConfig());
 };
 
 #endif // FRAGMENTCOMPARISONDIALOG_H

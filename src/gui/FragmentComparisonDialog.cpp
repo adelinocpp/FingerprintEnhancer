@@ -3,6 +3,11 @@
 #include <QMessageBox>
 #include <QtConcurrent>
 #include <QElapsedTimer>
+#include <QFileInfo>
+#include <QFormLayout>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
+#include <QTimer>
 #include <cmath>
 
 FragmentComparisonDialog::FragmentComparisonDialog(QWidget *parent)
@@ -29,67 +34,131 @@ FragmentComparisonDialog::~FragmentComparisonDialog() {
 }
 
 void FragmentComparisonDialog::setupUI() {
-    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    QHBoxLayout* mainLayout = new QHBoxLayout(this);
     
-    // ==================== Seleção de Fragmentos ====================
-    QGroupBox* selectionGroup = new QGroupBox("Seleção de Fragmentos");
-    QHBoxLayout* selectionLayout = new QHBoxLayout(selectionGroup);
+    // ==================== PAINEL ESQUERDO: Visualização das Imagens ====================
+    QWidget* leftPanel = new QWidget();
+    QVBoxLayout* leftLayout = new QVBoxLayout(leftPanel);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
     
-    // Fragmento 1
-    QVBoxLayout* frag1Layout = new QVBoxLayout();
-    frag1Layout->addWidget(new QLabel("Fragmento 1:"));
-    fragment1Combo = new QComboBox();
-    frag1Layout->addWidget(fragment1Combo);
-    selectionLayout->addLayout(frag1Layout);
+    // Título dos viewers
+    QHBoxLayout* titleLayout = new QHBoxLayout();
+    QLabel* title1 = new QLabel("Fragmento 1");
+    QFont titleFont = title1->font();
+    titleFont.setBold(true);
+    titleFont.setPointSize(11);
+    title1->setFont(titleFont);
+    title1->setAlignment(Qt::AlignCenter);
     
-    // Botão de troca
-    swapButton = new QPushButton("⇄");
-    swapButton->setToolTip("Trocar fragmentos");
-    swapButton->setMaximumWidth(50);
-    selectionLayout->addWidget(swapButton);
+    QLabel* title2 = new QLabel("Fragmento 2");
+    title2->setFont(titleFont);
+    title2->setAlignment(Qt::AlignCenter);
     
-    // Fragmento 2
-    QVBoxLayout* frag2Layout = new QVBoxLayout();
-    frag2Layout->addWidget(new QLabel("Fragmento 2:"));
-    fragment2Combo = new QComboBox();
-    frag2Layout->addWidget(fragment2Combo);
-    selectionLayout->addLayout(frag2Layout);
+    titleLayout->addWidget(title1);
+    titleLayout->addWidget(title2);
+    leftLayout->addLayout(titleLayout);
     
-    mainLayout->addWidget(selectionGroup);
-    
-    // ==================== Visualização Lado a Lado ====================
+    // Viewers lado a lado
     QSplitter* viewerSplitter = new QSplitter(Qt::Horizontal);
     
     // Viewer 1
-    QWidget* viewer1Container = new QWidget();
-    QVBoxLayout* viewer1Layout = new QVBoxLayout(viewer1Container);
-    viewer1Layout->setContentsMargins(0, 0, 0, 0);
     viewer1 = new ImageViewer();
-    overlay1 = new MinutiaeOverlay(viewer1);
-    viewer1Layout->addWidget(viewer1);
-    viewerSplitter->addWidget(viewer1Container);
+    viewer1->setMinimumSize(400, 400);
+    viewerSplitter->addWidget(viewer1);
     
     // Viewer 2
-    QWidget* viewer2Container = new QWidget();
-    QVBoxLayout* viewer2Layout = new QVBoxLayout(viewer2Container);
-    viewer2Layout->setContentsMargins(0, 0, 0, 0);
     viewer2 = new ImageViewer();
-    overlay2 = new MinutiaeOverlay(viewer2);
-    viewer2Layout->addWidget(viewer2);
-    viewerSplitter->addWidget(viewer2Container);
+    viewer2->setMinimumSize(400, 400);
+    viewerSplitter->addWidget(viewer2);
     
-    mainLayout->addWidget(viewerSplitter, 1);
+    viewerSplitter->setSizes(QList<int>() << 500 << 500);
+    leftLayout->addWidget(viewerSplitter, 1);
+    
+    mainLayout->addWidget(leftPanel, 3);  // 75% do espaço
+    
+    // ==================== PAINEL DIREITO: Controles e Resultados ====================
+    QWidget* rightPanel = new QWidget();
+    QVBoxLayout* rightLayout = new QVBoxLayout(rightPanel);
+    rightPanel->setMaximumWidth(400);
+    
+    // ==================== Seleção de Fragmentos ====================
+    QGroupBox* selectionGroup = new QGroupBox("Seleção de Fragmentos");
+    QVBoxLayout* selectionLayout = new QVBoxLayout(selectionGroup);
+    
+    // Fragmento 1
+    QLabel* label1 = new QLabel("Fragmento 1:");
+    fragment1Combo = new QComboBox();
+    selectionLayout->addWidget(label1);
+    selectionLayout->addWidget(fragment1Combo);
+    
+    // Fragmento 2
+    QLabel* label2 = new QLabel("Fragmento 2:");
+    fragment2Combo = new QComboBox();
+    selectionLayout->addWidget(label2);
+    selectionLayout->addWidget(fragment2Combo);
+    
+    // Botão de troca
+    swapButton = new QPushButton("⇄ Trocar Fragmentos");
+    swapButton->setToolTip("Inverter fragmentos 1 e 2");
+    selectionLayout->addWidget(swapButton);
+    
+    rightLayout->addWidget(selectionGroup);
     
     // ==================== Controles e Resultados ====================
     QGroupBox* controlGroup = new QGroupBox("Comparação");
     QVBoxLayout* controlLayout = new QVBoxLayout(controlGroup);
     
+    // ========== Parâmetros de Comparação ==========
+    QGroupBox* paramsGroup = new QGroupBox("Parâmetros de Matching");
+    QFormLayout* paramsLayout = new QFormLayout(paramsGroup);
+    
+    // Tolerância de posição
+    positionToleranceSpinBox = new QDoubleSpinBox();
+    positionToleranceSpinBox->setRange(1.0, 100.0);
+    positionToleranceSpinBox->setValue(15.0);
+    positionToleranceSpinBox->setSuffix(" pixels");
+    positionToleranceSpinBox->setToolTip("Distância máxima entre minúcias para considerar correspondência");
+    paramsLayout->addRow("Tolerância de Posição:", positionToleranceSpinBox);
+    
+    // Tolerância angular
+    angleToleranceSpinBox = new QDoubleSpinBox();
+    angleToleranceSpinBox->setRange(0.05, 1.57);  // ~3° a 90°
+    angleToleranceSpinBox->setValue(0.3);
+    angleToleranceSpinBox->setSingleStep(0.05);
+    angleToleranceSpinBox->setDecimals(2);
+    angleToleranceSpinBox->setSuffix(" rad");
+    angleToleranceSpinBox->setToolTip("Diferença angular máxima em radianos (0.3 rad ≈ 17°)");
+    paramsLayout->addRow("Tolerância Angular:", angleToleranceSpinBox);
+    
+    // Score mínimo
+    minScoreSpinBox = new QDoubleSpinBox();
+    minScoreSpinBox->setRange(0.0, 1.0);
+    minScoreSpinBox->setValue(0.5);
+    minScoreSpinBox->setSingleStep(0.05);
+    minScoreSpinBox->setDecimals(2);
+    minScoreSpinBox->setToolTip("Score mínimo de similaridade local para aceitar correspondência");
+    paramsLayout->addRow("Score Mínimo:", minScoreSpinBox);
+    
+    // Usar peso de tipo
+    useTypeWeightingCheckBox = new QCheckBox("Considerar tipo de minúcia");
+    useTypeWeightingCheckBox->setChecked(true);
+    useTypeWeightingCheckBox->setToolTip("Dar mais peso para minúcias do mesmo tipo");
+    paramsLayout->addRow("", useTypeWeightingCheckBox);
+    
+    // Usar peso de qualidade
+    useQualityWeightingCheckBox = new QCheckBox("Considerar qualidade");
+    useQualityWeightingCheckBox->setChecked(true);
+    useQualityWeightingCheckBox->setToolTip("Considerar qualidade das minúcias no cálculo");
+    paramsLayout->addRow("", useQualityWeightingCheckBox);
+    
+    controlLayout->addWidget(paramsGroup);
+    
     // Botão de comparar
-    compareButton = new QPushButton("Calcular Score de Similaridade");
+    compareButton = new QPushButton("▶ Calcular Score");
     compareButton->setEnabled(false);
     compareButton->setMinimumHeight(40);
     QFont buttonFont = compareButton->font();
-    buttonFont.setPointSize(12);
+    buttonFont.setPointSize(11);
     buttonFont.setBold(true);
     compareButton->setFont(buttonFont);
     controlLayout->addWidget(compareButton);
@@ -100,28 +169,37 @@ void FragmentComparisonDialog::setupUI() {
     progressBar->setRange(0, 0);  // Indeterminado
     controlLayout->addWidget(progressBar);
     
-    // Resultados
+    rightLayout->addWidget(controlGroup);
+    
+    // ==================== Resultados ====================
     QGroupBox* resultsGroup = new QGroupBox("Resultados");
     QVBoxLayout* resultsLayout = new QVBoxLayout(resultsGroup);
     
-    resultLikelihoodLabel = new QLabel("Likelihood Ratio (LR): -");
+    resultLikelihoodLabel = new QLabel("LR: -");
     resultLogLRLabel = new QLabel("Log₁₀(LR): -");
-    resultScoreLabel = new QLabel("Score de Similaridade: -");
-    resultMatchedLabel = new QLabel("Minúcias Correspondentes: -");
+    resultScoreLabel = new QLabel("Score: -");
+    resultMatchedLabel = new QLabel("Matches: -");
     resultInterpretationLabel = new QLabel("Interpretação: -");
-    resultTimeLabel = new QLabel("Tempo de Cálculo: -");
+    resultTimeLabel = new QLabel("Tempo: -");
     
     QFont resultFont;
-    resultFont.setPointSize(10);
+    resultFont.setPointSize(9);
     resultLikelihoodLabel->setFont(resultFont);
     resultLogLRLabel->setFont(resultFont);
     resultScoreLabel->setFont(resultFont);
     resultMatchedLabel->setFont(resultFont);
     resultTimeLabel->setFont(resultFont);
     
+    resultLikelihoodLabel->setWordWrap(true);
+    resultLogLRLabel->setWordWrap(true);
+    resultScoreLabel->setWordWrap(true);
+    resultMatchedLabel->setWordWrap(true);
+    resultTimeLabel->setWordWrap(true);
+    
     QFont interpretFont = resultFont;
     interpretFont.setBold(true);
     resultInterpretationLabel->setFont(interpretFont);
+    resultInterpretationLabel->setWordWrap(true);
     
     resultsLayout->addWidget(resultLikelihoodLabel);
     resultsLayout->addWidget(resultLogLRLabel);
@@ -130,15 +208,21 @@ void FragmentComparisonDialog::setupUI() {
     resultsLayout->addWidget(resultInterpretationLabel);
     resultsLayout->addWidget(resultTimeLabel);
     
-    controlLayout->addWidget(resultsGroup);
-    mainLayout->addWidget(controlGroup);
+    rightLayout->addWidget(resultsGroup);
+    
+    // Espaço expansível
+    rightLayout->addStretch();
     
     // ==================== Botões de Ação ====================
-    QHBoxLayout* buttonLayout = new QHBoxLayout();
-    buttonLayout->addStretch();
     closeButton = new QPushButton("Fechar");
-    buttonLayout->addWidget(closeButton);
-    mainLayout->addLayout(buttonLayout);
+    rightLayout->addWidget(closeButton);
+    
+    mainLayout->addWidget(rightPanel, 1);  // 25% do espaço
+    
+    // ==================== Criar overlays DEPOIS dos viewers ====================
+    // Os overlays precisam ser criados como filhos dos viewers
+    overlay1 = new FingerprintEnhancer::MinutiaeOverlay(viewer1);
+    overlay2 = new FingerprintEnhancer::MinutiaeOverlay(viewer2);
     
     // ==================== Conectar Sinais ====================
     connect(fragment1Combo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -167,11 +251,12 @@ void FragmentComparisonDialog::loadFragmentsList() {
     
     // Coletar todos os fragmentos de todas as imagens
     for (auto& image : project->images) {
+        QString imageName = QFileInfo(image.originalFilePath).fileName();
         for (auto& fragment : image.fragments) {
             availableFragments.append(&fragment);
             
             QString displayName = QString("%1 - Fragmento %2 (%3 minúcias)")
-                .arg(image.name)
+                .arg(imageName)
                 .arg(fragment.id)
                 .arg(fragment.minutiae.size());
             
@@ -235,17 +320,45 @@ void FragmentComparisonDialog::onSwapFragments() {
 
 void FragmentComparisonDialog::displayFragment(FingerprintEnhancer::Fragment* fragment,
                                                ImageViewer* viewer,
-                                               MinutiaeOverlay* overlay) {
-    if (!fragment) return;
+                                               FingerprintEnhancer::MinutiaeOverlay* overlay) {
+    if (!fragment) {
+        fprintf(stderr, "[DISPLAY] Fragmento nulo - nada a exibir\n");
+        return;
+    }
+    
+    fprintf(stderr, "[DISPLAY] Exibindo fragmento %s com %d minúcias\n",
+            fragment->id.toStdString().c_str(), fragment->minutiae.size());
     
     // Exibir imagem do fragmento
     viewer->setImage(fragment->workingImage);
     viewer->zoomToFit();
     
-    // Exibir minúcias
-    overlay->setMinutiae(fragment->minutiae);
+    // Configurar overlay de minúcias
+    overlay->setFragment(fragment);
     overlay->setEditMode(false);  // Apenas visualização
-    overlay->update();
+    
+    // Garantir que minúcias sejam exibidas com configurações padrão
+    overlay->setShowLabels(true);
+    overlay->setShowAngles(true);
+    
+    // Sincronizar overlay com viewer
+    QTimer::singleShot(100, [this, viewer, overlay]() {
+        // Dar tempo para o viewer processar a imagem
+        overlay->setGeometry(viewer->rect());
+        overlay->setScaleFactor(viewer->getScaleFactor());
+        overlay->setScrollOffset(QPoint(0, 0));
+        overlay->setImageOffset(viewer->getImageOffset());
+        
+        // Forçar atualização
+        overlay->raise();
+        overlay->setVisible(true);
+        overlay->update();
+        
+        fprintf(stderr, "[DISPLAY] Overlay atualizado: geometry=%dx%d, scale=%.2f\n",
+                overlay->width(), overlay->height(), viewer->getScaleFactor());
+    });
+    
+    fprintf(stderr, "[DISPLAY] Fragmento exibido com sucesso\n");
 }
 
 void FragmentComparisonDialog::clearResults() {
@@ -284,12 +397,34 @@ void FragmentComparisonDialog::onCompareClicked() {
     progressBar->setVisible(true);
     clearResults();
     
-    // Executar comparação em thread separada
-    QVector<MinutiaeData> minutiae1 = frag1->minutiae;
-    QVector<MinutiaeData> minutiae2 = frag2->minutiae;
+    // Ler configurações da UI
+    AFISLikelihoodConfig config;
+    config.positionTolerance = positionToleranceSpinBox->value();
+    config.angleTolerance = angleToleranceSpinBox->value();
+    config.minMatchScore = minScoreSpinBox->value();
+    config.useTypeWeighting = useTypeWeightingCheckBox->isChecked();
+    config.useQualityWeighting = useQualityWeightingCheckBox->isChecked();
     
-    comparisonFuture = QtConcurrent::run([minutiae1, minutiae2]() {
-        return compareFragments(minutiae1, minutiae2);
+    fprintf(stderr, "\n[COMPARISON] ========== INICIANDO COMPARAÇÃO ==========\n");
+    fprintf(stderr, "[COMPARISON] Fragmento 1: %s (%d minúcias)\n", 
+            frag1->id.toStdString().c_str(), frag1->minutiae.size());
+    fprintf(stderr, "[COMPARISON] Fragmento 2: %s (%d minúcias)\n", 
+            frag2->id.toStdString().c_str(), frag2->minutiae.size());
+    fprintf(stderr, "[COMPARISON] Configurações:\n");
+    fprintf(stderr, "[COMPARISON]   - Tolerância posição: %.1f pixels\n", config.positionTolerance);
+    fprintf(stderr, "[COMPARISON]   - Tolerância ângulo: %.3f rad (%.1f°)\n", 
+            config.angleTolerance, config.angleTolerance * 180.0 / M_PI);
+    fprintf(stderr, "[COMPARISON]   - Score mínimo: %.2f\n", config.minMatchScore);
+    fprintf(stderr, "[COMPARISON]   - Usar tipo: %s\n", config.useTypeWeighting ? "SIM" : "NÃO");
+    fprintf(stderr, "[COMPARISON]   - Usar qualidade: %s\n", config.useQualityWeighting ? "SIM" : "NÃO");
+    fprintf(stderr, "[COMPARISON] ==============================================\n\n");
+    
+    // Executar comparação em thread separada
+    QVector<FingerprintEnhancer::Minutia> minutiae1 = frag1->minutiae;
+    QVector<FingerprintEnhancer::Minutia> minutiae2 = frag2->minutiae;
+    
+    comparisonFuture = QtConcurrent::run([minutiae1, minutiae2, config]() {
+        return compareFragments(minutiae1, minutiae2, config);
     });
     
     comparisonWatcher->setFuture(comparisonFuture);
@@ -373,8 +508,9 @@ QString FragmentComparisonDialog::getInterpretationText(double logLR) {
 // ==================== ALGORITMO DE COMPARAÇÃO ====================
 
 FragmentComparisonResult FragmentComparisonDialog::compareFragments(
-    const QVector<MinutiaeData>& minutiae1,
-    const QVector<MinutiaeData>& minutiae2) {
+    const QVector<FingerprintEnhancer::Minutia>& minutiae1,
+    const QVector<FingerprintEnhancer::Minutia>& minutiae2,
+    const AFISLikelihoodConfig& config) {
     
     QElapsedTimer timer;
     timer.start();
@@ -383,129 +519,26 @@ FragmentComparisonResult FragmentComparisonDialog::compareFragments(
     result.totalMinutiaeFragment1 = minutiae1.size();
     result.totalMinutiaeFragment2 = minutiae2.size();
     
+    // Criar calculadora com configuração
+    AFISLikelihoodCalculator calculator(config);
+    
     // 1. Encontrar correspondências entre minúcias
-    result.correspondences = findCorrespondences(minutiae1, minutiae2);
+    result.correspondences = calculator.findCorrespondences(minutiae1, minutiae2);
     result.matchedMinutiae = result.correspondences.size();
     
     // 2. Calcular Likelihood Ratio
-    result.likelihoodRatio = calculateLikelihoodRatio(minutiae1, minutiae2, result.correspondences);
+    result.likelihoodRatio = calculator.calculateLikelihoodRatio(minutiae1, minutiae2, result.correspondences);
     result.logLR = (result.likelihoodRatio > 0) ? log10(result.likelihoodRatio) : -100.0;
     
     // 3. Calcular score de similaridade simples (0.0 a 1.0)
-    int minMinutiae = qMin(minutiae1.size(), minutiae2.size());
-    result.similarityScore = (minMinutiae > 0) ?
-        static_cast<double>(result.matchedMinutiae) / static_cast<double>(minMinutiae) : 0.0;
+    result.similarityScore = calculator.calculateSimilarityScore(minutiae1, minutiae2, result.correspondences);
     
     // 4. Interpretação
-    result.interpretationText = getInterpretationText(result.logLR);
+    result.interpretationText = AFISLikelihoodCalculator::getInterpretationText(result.logLR);
     
     result.executionTimeMs = timer.elapsed();
     
     return result;
 }
 
-QVector<QPair<int, int>> FragmentComparisonDialog::findCorrespondences(
-    const QVector<MinutiaeData>& minutiae1,
-    const QVector<MinutiaeData>& minutiae2,
-    double positionTolerance,
-    double angleTolerance) {
-    
-    QVector<QPair<int, int>> correspondences;
-    QVector<bool> matched2(minutiae2.size(), false);
-    
-    // Para cada minúcia no fragmento 1, encontrar melhor match no fragmento 2
-    for (int i = 0; i < minutiae1.size(); i++) {
-        double bestScore = -1.0;
-        int bestMatch = -1;
-        
-        for (int j = 0; j < minutiae2.size(); j++) {
-            if (matched2[j]) continue;  // Já foi pareada
-            
-            double score = computeLocalSimilarity(minutiae1[i], minutiae2[j]);
-            
-            // Verificar tolerâncias
-            double distSq = pow(minutiae1[i].position.x - minutiae2[j].position.x, 2) +
-                           pow(minutiae1[i].position.y - minutiae2[j].position.y, 2);
-            double angleDiff = fabs(minutiae1[i].angle - minutiae2[j].angle);
-            if (angleDiff > M_PI) angleDiff = 2 * M_PI - angleDiff;
-            
-            if (sqrt(distSq) > positionTolerance || angleDiff > angleTolerance) {
-                continue;  // Fora das tolerâncias
-            }
-            
-            if (score > bestScore) {
-                bestScore = score;
-                bestMatch = j;
-            }
-        }
-        
-        if (bestMatch >= 0 && bestScore > 0.5) {  // Threshold mínimo
-            correspondences.append(qMakePair(i, bestMatch));
-            matched2[bestMatch] = true;
-        }
-    }
-    
-    return correspondences;
-}
-
-double FragmentComparisonDialog::computeLocalSimilarity(
-    const MinutiaeData& m1,
-    const MinutiaeData& m2) {
-    
-    // Distância euclidiana
-    double dx = m1.position.x - m2.position.x;
-    double dy = m1.position.y - m2.position.y;
-    double dist = sqrt(dx * dx + dy * dy);
-    
-    // Diferença angular
-    double angleDiff = fabs(m1.angle - m2.angle);
-    if (angleDiff > M_PI) angleDiff = 2 * M_PI - angleDiff;
-    
-    // Score baseado em distância e ângulo
-    double distScore = exp(-dist / 10.0);  // Decai com distância
-    double angleScore = cos(angleDiff);     // 1.0 se ângulos iguais, -1.0 se opostos
-    
-    // Peso do tipo de minúcia (minúcias do mesmo tipo têm score maior)
-    double typeScore = (m1.type == m2.type) ? 1.0 : 0.5;
-    
-    // Peso da qualidade
-    double qualityScore = (m1.quality + m2.quality) / 2.0;
-    
-    // Score final (0.0 a 1.0)
-    double score = (distScore * 0.4 + angleScore * 0.3 + typeScore * 0.2 + qualityScore * 0.1);
-    
-    return qMax(0.0, score);
-}
-
-double FragmentComparisonDialog::calculateLikelihoodRatio(
-    const QVector<MinutiaeData>& minutiae1,
-    const QVector<MinutiaeData>& minutiae2,
-    const QVector<QPair<int, int>>& correspondences) {
-    
-    // TODO: Implementar cálculo completo baseado em Neumann et al. (2007)
-    // Por enquanto, usar aproximação simples
-    
-    int n = correspondences.size();  // Número de correspondências
-    
-    if (n == 0) {
-        return 1e-10;  // LR muito baixo (evidência de não-match)
-    }
-    
-    // Estimativa simples: LR cresce exponencialmente com número de matches
-    // Baseado em análises empíricas de AFIS
-    // Cada minúcia correspondente adiciona ~2-3 ordens de magnitude ao LR
-    
-    double baseLR = 10.0;  // LR base para 1 correspondência
-    double exponent = n * 2.5;  // Cada correspondência multiplica por ~10^2.5
-    
-    double LR = pow(baseLR, exponent);
-    
-    // Fator de qualidade: reduzir LR se poucas minúcias no total
-    int minTotal = qMin(minutiae1.size(), minutiae2.size());
-    if (minTotal > 0) {
-        double completeness = static_cast<double>(n) / static_cast<double>(minTotal);
-        LR *= completeness;  // Penalizar se muitas minúcias não foram pareadas
-    }
-    
-    return LR;
-}
+// Funções de cálculo migradas para AFISLikelihoodCalculator em src/afis/

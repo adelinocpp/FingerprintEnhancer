@@ -3590,6 +3590,8 @@ void MainWindow::identifyFingerprint() {
 }
 
 void MainWindow::verifyFingerprint() {
+    using PM = FingerprintEnhancer::ProjectManager;
+    
     // Abrir dialog de comparação 1:1 de fragmentos
     FragmentComparisonDialog* dialog = new FragmentComparisonDialog(this);
     dialog->setProject(PM::instance().getCurrentProject());
