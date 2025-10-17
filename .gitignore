@@ -167,6 +167,7 @@ Pappers
 resources
 scripts
 translations
+logs
 
 # Other files
 *.fpe
@@ -176,11 +177,22 @@ INSTALL.md
 Makefile
 TESTE_COMPLETO_RESULTADO.md
 .sync.ffs_db
-
-logs
+*.png
+*.bat
+*.md
+*/*.md
 
 # Ignora todos os arquivos .md
-*.md
+COMO_TESTAR_DEBUG.md
+CROP_INTERATIVO_STATUS.md
+DEBUG_NOVO_PROJETO.md
+IMPLEMENTACAO_CROP_INTERATIVO.md
+INSTRUCOES_INTEGRACAO.md
+PLANO_AFIS_E_MINUTIAE.md
+PROGRESSO_IMPLEMENTACAO.md
+README.md
+TODO_FRAGMENTOS.md
+
 
 # Exceto o readme.md (ajuste o nome se necessário)
 !README.md
