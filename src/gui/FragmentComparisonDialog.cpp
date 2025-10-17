@@ -1,6 +1,8 @@
 #include "FragmentComparisonDialog.h"
+#include "CorrespondenceVisualizationDialog.h"
 #include <QSplitter>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QtConcurrent>
 #include <QElapsedTimer>
 #include <QFileInfo>
@@ -8,6 +10,8 @@
 #include <QDoubleSpinBox>
 #include <QCheckBox>
 #include <QTimer>
+#include <QEvent>
+#include <QWheelEvent>
 #include <cmath>
 
 FragmentComparisonDialog::FragmentComparisonDialog(QWidget *parent)
@@ -114,11 +118,19 @@ void FragmentComparisonDialog::setupUI() {
     
     // Tolerância de posição
     positionToleranceSpinBox = new QDoubleSpinBox();
-    positionToleranceSpinBox->setRange(1.0, 100.0);
-    positionToleranceSpinBox->setValue(15.0);
-    positionToleranceSpinBox->setSuffix(" pixels");
-    positionToleranceSpinBox->setToolTip("Distância máxima entre minúcias para considerar correspondência");
+    positionToleranceSpinBox->setRange(0.1, 10.0);
+    positionToleranceSpinBox->setValue(3.0);
+    positionToleranceSpinBox->setSingleStep(0.1);
+    positionToleranceSpinBox->setDecimals(1);
+    positionToleranceSpinBox->setSuffix(" mm");
+    positionToleranceSpinBox->setToolTip("Distância máxima em milímetros entre minúcias para considerar correspondência");
     paramsLayout->addRow("Tolerância de Posição:", positionToleranceSpinBox);
+    
+    // Considerar ângulo (checkbox)
+    useAngleCheckBox = new QCheckBox("Considerar ângulo das minúcias");
+    useAngleCheckBox->setChecked(false);
+    useAngleCheckBox->setToolTip("Se desabilitado, apenas posição é considerada no matching");
+    paramsLayout->addRow("", useAngleCheckBox);
     
     // Tolerância angular
     angleToleranceSpinBox = new QDoubleSpinBox();
@@ -130,24 +142,34 @@ void FragmentComparisonDialog::setupUI() {
     angleToleranceSpinBox->setToolTip("Diferença angular máxima em radianos (0.3 rad ≈ 17°)");
     paramsLayout->addRow("Tolerância Angular:", angleToleranceSpinBox);
     
+    // Conectar checkbox ao spinbox de ângulo
+    connect(useAngleCheckBox, &QCheckBox::toggled, angleToleranceSpinBox, &QWidget::setEnabled);
+    angleToleranceSpinBox->setEnabled(false);  // Inicia desabilitado (ângulo não considerado por padrão)
+    
     // Score mínimo
     minScoreSpinBox = new QDoubleSpinBox();
     minScoreSpinBox->setRange(0.0, 1.0);
-    minScoreSpinBox->setValue(0.5);
+    minScoreSpinBox->setValue(0.0);
     minScoreSpinBox->setSingleStep(0.05);
     minScoreSpinBox->setDecimals(2);
     minScoreSpinBox->setToolTip("Score mínimo de similaridade local para aceitar correspondência");
     paramsLayout->addRow("Score Mínimo:", minScoreSpinBox);
     
+    // Separador
+    QFrame* line = new QFrame();
+    line->setFrameShape(QFrame::HLine);
+    line->setFrameShadow(QFrame::Sunken);
+    paramsLayout->addRow(line);
+    
     // Usar peso de tipo
     useTypeWeightingCheckBox = new QCheckBox("Considerar tipo de minúcia");
-    useTypeWeightingCheckBox->setChecked(true);
+    useTypeWeightingCheckBox->setChecked(false);
     useTypeWeightingCheckBox->setToolTip("Dar mais peso para minúcias do mesmo tipo");
     paramsLayout->addRow("", useTypeWeightingCheckBox);
     
     // Usar peso de qualidade
     useQualityWeightingCheckBox = new QCheckBox("Considerar qualidade");
-    useQualityWeightingCheckBox->setChecked(true);
+    useQualityWeightingCheckBox->setChecked(false);
     useQualityWeightingCheckBox->setToolTip("Considerar qualidade das minúcias no cálculo");
     paramsLayout->addRow("", useQualityWeightingCheckBox);
     
@@ -214,6 +236,11 @@ void FragmentComparisonDialog::setupUI() {
     rightLayout->addStretch();
     
     // ==================== Botões de Ação ====================
+    visualizeButton = new QPushButton("🔍 Ver Correspondências");
+    visualizeButton->setToolTip("Abrir visualização gráfica das minúcias correspondentes");
+    visualizeButton->setEnabled(false);  // Habilitar após comparação
+    rightLayout->addWidget(visualizeButton);
+    
     closeButton = new QPushButton("Fechar");
     rightLayout->addWidget(closeButton);
     
@@ -233,8 +260,30 @@ void FragmentComparisonDialog::setupUI() {
             this, &FragmentComparisonDialog::onSwapFragments);
     connect(compareButton, &QPushButton::clicked,
             this, &FragmentComparisonDialog::onCompareClicked);
+    connect(visualizeButton, &QPushButton::clicked,
+            this, &FragmentComparisonDialog::onVisualizeClicked);
     connect(closeButton, &QPushButton::clicked,
             this, &QDialog::accept);
+    
+    // Conectar sinais de zoom/scroll dos viewers aos overlays
+    connect(viewer1, &ImageViewer::zoomChanged,
+            this, &FragmentComparisonDialog::onViewer1ZoomChanged);
+    connect(viewer2, &ImageViewer::zoomChanged,
+            this, &FragmentComparisonDialog::onViewer2ZoomChanged);
+    
+    // Conectar sinais das scrollbars para sincronizar overlays
+    connect(viewer1->horizontalScrollBar(), &QScrollBar::valueChanged,
+            this, &FragmentComparisonDialog::syncOverlay1);
+    connect(viewer1->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, &FragmentComparisonDialog::syncOverlay1);
+    connect(viewer2->horizontalScrollBar(), &QScrollBar::valueChanged,
+            this, &FragmentComparisonDialog::syncOverlay2);
+    connect(viewer2->verticalScrollBar(), &QScrollBar::valueChanged,
+            this, &FragmentComparisonDialog::syncOverlay2);
+    
+    // Instalar event filters para capturar eventos de scroll
+    viewer1->installEventFilter(this);
+    viewer2->installEventFilter(this);
 }
 
 void FragmentComparisonDialog::setProject(FingerprintEnhancer::Project* proj) {
@@ -245,49 +294,79 @@ void FragmentComparisonDialog::setProject(FingerprintEnhancer::Project* proj) {
 void FragmentComparisonDialog::loadFragmentsList() {
     fragment1Combo->clear();
     fragment2Combo->clear();
-    availableFragments.clear();
+    availableFragments.clear();  // ✅ LIMPAR vetor antes de popular
     
     if (!project) return;
     
-    // Coletar todos os fragmentos de todas as imagens
+    // Coletar APENAS fragmentos COM ESCALA definida
+    int totalFragments = 0;
+    int fragmentsWithScale = 0;
+    
     for (auto& image : project->images) {
-        QString imageName = QFileInfo(image.originalFilePath).fileName();
         for (auto& fragment : image.fragments) {
-            availableFragments.append(&fragment);
+            totalFragments++;
             
-            QString displayName = QString("%1 - Fragmento %2 (%3 minúcias)")
-                .arg(imageName)
-                .arg(fragment.id)
-                .arg(fragment.minutiae.size());
+            // FILTRO: Só aceitar fragmentos com escala definida
+            if (!fragment.hasScale()) {
+                fprintf(stderr, "[COMPARISON] Fragmento %s IGNORADO: sem escala definida\n",
+                        fragment.id.toStdString().c_str());
+                continue;
+            }
             
-            fragment1Combo->addItem(displayName);
-            fragment2Combo->addItem(displayName);
+            fragmentsWithScale++;
+            
+            QString displayName = QString("%1 (%2 minúcias, %.1f px/mm)")
+                .arg(QFileInfo(image.originalFilePath).fileName())
+                .arg(fragment.minutiae.size())
+                .arg(fragment.pixelsPerMM);
+            
+            fragment1Combo->addItem(displayName, fragment.id);
+            fragment2Combo->addItem(displayName, fragment.id);
+            availableFragments.append(&fragment);  // ✅ ADICIONAR ao vetor também!
+            
+            fprintf(stderr, "[COMPARISON] Fragmento %s: escala=%.2f px/mm\n",
+                    fragment.id.toStdString().c_str(), fragment.pixelsPerMM);
         }
     }
     
-    // Pré-selecionar diferentes fragmentos se houver pelo menos 2
-    if (availableFragments.size() >= 2) {
-        fragment1Combo->setCurrentIndex(0);
-        fragment2Combo->setCurrentIndex(1);
+    fprintf(stderr, "[COMPARISON] Total de fragmentos: %d, com escala: %d\n",
+            totalFragments, fragmentsWithScale);
+    fprintf(stderr, "[COMPARISON] Vetor availableFragments.size() = %d\n",
+            availableFragments.size());
+    
+    // Desabilitar botão de comparação se não houver fragmentos suficientes
+    bool hasFragments = fragment1Combo->count() >= 2;
+    compareButton->setEnabled(hasFragments);
+    swapButton->setEnabled(hasFragments);
+    
+    if (!hasFragments && totalFragments > 0) {
+        QMessageBox::information(this, "Sem Fragmentos Disponíveis",
+            QString("Nenhum fragmento com escala definida encontrado.\n\n"
+                    "Total de fragmentos: %1\n"
+                    "Com escala definida: %2\n\n"
+                    "Defina a escala dos fragmentos antes de compará-los.")
+            .arg(totalFragments).arg(fragmentsWithScale));
     }
 }
 
 void FragmentComparisonDialog::selectFragments(const QString& fragment1Id, const QString& fragment2Id) {
-    // Encontrar índices dos fragmentos
-    for (int i = 0; i < availableFragments.size(); i++) {
-        if (availableFragments[i]->id == fragment1Id) {
+    for (int i = 0; i < fragment1Combo->count(); i++) {
+        if (fragment1Combo->itemData(i).toString() == fragment1Id) {
             fragment1Combo->setCurrentIndex(i);
         }
-        if (availableFragments[i]->id == fragment2Id) {
+        if (fragment2Combo->itemData(i).toString() == fragment2Id) {
             fragment2Combo->setCurrentIndex(i);
         }
     }
 }
 
 void FragmentComparisonDialog::onFragment1Changed(int index) {
-    if (index < 0 || index >= availableFragments.size()) return;
+    if (index < 0 || !project) return;
     
-    FingerprintEnhancer::Fragment* fragment = availableFragments[index];
+    QString fragmentId = fragment1Combo->itemData(index).toString();
+    FingerprintEnhancer::Fragment* fragment = project->findFragment(fragmentId);
+    if (!fragment) return;
+    
     displayFragment(fragment, viewer1, overlay1);
     
     // Habilitar botão se ambos fragmentos estão selecionados
@@ -299,9 +378,12 @@ void FragmentComparisonDialog::onFragment1Changed(int index) {
 }
 
 void FragmentComparisonDialog::onFragment2Changed(int index) {
-    if (index < 0 || index >= availableFragments.size()) return;
+    if (index < 0 || !project) return;
     
-    FingerprintEnhancer::Fragment* fragment = availableFragments[index];
+    QString fragmentId = fragment2Combo->itemData(index).toString();
+    FingerprintEnhancer::Fragment* fragment = project->findFragment(fragmentId);
+    if (!fragment) return;
+    
     displayFragment(fragment, viewer2, overlay2);
     
     // Habilitar botão se ambos fragmentos estão selecionados
@@ -316,6 +398,105 @@ void FragmentComparisonDialog::onSwapFragments() {
     int temp = fragment1Combo->currentIndex();
     fragment1Combo->setCurrentIndex(fragment2Combo->currentIndex());
     fragment2Combo->setCurrentIndex(temp);
+}
+
+void FragmentComparisonDialog::onVisualizeClicked() {
+    if (lastResult.matchedMinutiae == 0) {
+        QMessageBox::information(this, "Sem Correspondências",
+            "Não há correspondências para visualizar.\n"
+            "Execute uma comparação primeiro.");
+        return;
+    }
+    
+    // Pegar fragmentos atuais
+    int idx1 = fragment1Combo->currentIndex();
+    int idx2 = fragment2Combo->currentIndex();
+    
+    if (idx1 < 0 || idx1 >= availableFragments.size() ||
+        idx2 < 0 || idx2 >= availableFragments.size()) {
+        QMessageBox::warning(this, "Erro", "Fragmentos não encontrados.");
+        return;
+    }
+    
+    FingerprintEnhancer::Fragment* frag1 = availableFragments[idx1];
+    FingerprintEnhancer::Fragment* frag2 = availableFragments[idx2];
+    
+    // Criar e mostrar diálogo de visualização
+    CorrespondenceVisualizationDialog* vizDialog = new CorrespondenceVisualizationDialog(this);
+    vizDialog->setData(
+        frag1->workingImage,
+        frag2->workingImage,
+        frag1->minutiae,
+        frag2->minutiae,
+        lastResult.correspondences
+    );
+    
+    vizDialog->exec();
+    delete vizDialog;
+}
+
+void FragmentComparisonDialog::onViewer1ZoomChanged(double factor) {
+    syncOverlay1();
+}
+
+void FragmentComparisonDialog::onViewer2ZoomChanged(double factor) {
+    syncOverlay2();
+}
+
+void FragmentComparisonDialog::syncOverlay1() {
+    if (!overlay1 || !viewer1) return;
+    
+    // Pegar posição do scroll do viewer
+    QPoint scrollPos(viewer1->horizontalScrollBar()->value(),
+                     viewer1->verticalScrollBar()->value());
+    
+    overlay1->setGeometry(viewer1->rect());
+    overlay1->setScaleFactor(viewer1->getScaleFactor());
+    overlay1->setScrollOffset(scrollPos);  // ✅ Usar scroll real do viewer
+    overlay1->setImageOffset(viewer1->getImageOffset());
+    overlay1->update();
+    
+    fprintf(stderr, "[SYNC] Overlay1: scale=%.2f, scroll=(%d,%d), geometry=%dx%d\n",
+            viewer1->getScaleFactor(), scrollPos.x(), scrollPos.y(),
+            overlay1->width(), overlay1->height());
+}
+
+void FragmentComparisonDialog::syncOverlay2() {
+    if (!overlay2 || !viewer2) return;
+    
+    // Pegar posição do scroll do viewer
+    QPoint scrollPos(viewer2->horizontalScrollBar()->value(),
+                     viewer2->verticalScrollBar()->value());
+    
+    overlay2->setGeometry(viewer2->rect());
+    overlay2->setScaleFactor(viewer2->getScaleFactor());
+    overlay2->setScrollOffset(scrollPos);  // ✅ Usar scroll real do viewer
+    overlay2->setImageOffset(viewer2->getImageOffset());
+    overlay2->update();
+    
+    fprintf(stderr, "[SYNC] Overlay2: scale=%.2f, scroll=(%d,%d), geometry=%dx%d\n",
+            viewer2->getScaleFactor(), scrollPos.x(), scrollPos.y(),
+            overlay2->width(), overlay2->height());
+}
+
+bool FragmentComparisonDialog::eventFilter(QObject* obj, QEvent* event) {
+    // Capturar eventos de scroll e resize dos viewers (NÃO Paint para evitar loop)
+    if (obj == viewer1 || obj == viewer2) {
+        if (event->type() == QEvent::Wheel || 
+            event->type() == QEvent::Resize) {
+            
+            // Sincronizar overlay correspondente (delay para evitar múltiplas chamadas)
+            QTimer::singleShot(10, this, [this, obj]() {
+                if (obj == viewer1) {
+                    syncOverlay1();
+                } else if (obj == viewer2) {
+                    syncOverlay2();
+                }
+            });
+        }
+    }
+    
+    return QDialog::eventFilter(obj, event);
 }
 
 void FragmentComparisonDialog::displayFragment(FingerprintEnhancer::Fragment* fragment,
@@ -341,22 +522,26 @@ void FragmentComparisonDialog::displayFragment(FingerprintEnhancer::Fragment* fr
     overlay->setShowLabels(true);
     overlay->setShowAngles(true);
     
-    // Sincronizar overlay com viewer
-    QTimer::singleShot(100, [this, viewer, overlay]() {
-        // Dar tempo para o viewer processar a imagem
+    // Sincronizar overlay com viewer (imediatamente e com delay)
+    auto syncFunc = [this, viewer, overlay]() {
         overlay->setGeometry(viewer->rect());
         overlay->setScaleFactor(viewer->getScaleFactor());
         overlay->setScrollOffset(QPoint(0, 0));
         overlay->setImageOffset(viewer->getImageOffset());
-        
-        // Forçar atualização
         overlay->raise();
         overlay->setVisible(true);
         overlay->update();
         
         fprintf(stderr, "[DISPLAY] Overlay atualizado: geometry=%dx%d, scale=%.2f\n",
                 overlay->width(), overlay->height(), viewer->getScaleFactor());
-    });
+    };
+    
+    // Sincronizar imediatamente
+    syncFunc();
+    
+    // E novamente após processamento da imagem
+    QTimer::singleShot(100, syncFunc);
+    QTimer::singleShot(300, syncFunc);
     
     fprintf(stderr, "[DISPLAY] Fragmento exibido com sucesso\n");
 }
@@ -368,14 +553,30 @@ void FragmentComparisonDialog::clearResults() {
     resultMatchedLabel->setText("Minúcias Correspondentes: -");
     resultInterpretationLabel->setText("Interpretação: -");
     resultTimeLabel->setText("Tempo de Cálculo: -");
+    visualizeButton->setEnabled(false);
 }
 
 void FragmentComparisonDialog::onCompareClicked() {
     int idx1 = fragment1Combo->currentIndex();
     int idx2 = fragment2Combo->currentIndex();
     
+    fprintf(stderr, "\n[COMPARISON] ========== BOTÃO COMPARAR CLICADO ==========\n");
+    fprintf(stderr, "[COMPARISON] idx1=%d, idx2=%d, availableFragments.size()=%d\n",
+            idx1, idx2, availableFragments.size());
+    
     if (idx1 < 0 || idx2 < 0 || idx1 == idx2) {
         QMessageBox::warning(this, "Erro", "Selecione dois fragmentos diferentes.");
+        return;
+    }
+    
+    // Validação crítica de índices antes de acessar availableFragments
+    if (idx1 >= availableFragments.size() || idx2 >= availableFragments.size()) {
+        fprintf(stderr, "[COMPARISON] ERRO CRÍTICO: Índices fora do range! idx1=%d, idx2=%d, size=%d\n",
+                idx1, idx2, availableFragments.size());
+        QMessageBox::critical(this, "Erro Interno",
+            QString("Erro ao acessar fragmentos (índices: %1, %2, tamanho: %3).\n"
+                    "Tente reabrir a janela de comparação.")
+            .arg(idx1).arg(idx2).arg(availableFragments.size()));
         return;
     }
     
@@ -398,25 +599,55 @@ void FragmentComparisonDialog::onCompareClicked() {
     clearResults();
     
     // Ler configurações da UI
+    double toleranceMM = positionToleranceSpinBox->value();
+    
+    // Calcular escala média dos dois fragmentos
+    double avgScale = (frag1->pixelsPerMM + frag2->pixelsPerMM) / 2.0;
+    
+    // Converter tolerância de mm para pixels usando escala média
+    double tolerancePixels = toleranceMM * avgScale;
+    
     AFISLikelihoodConfig config;
-    config.positionTolerance = positionToleranceSpinBox->value();
-    config.angleTolerance = angleToleranceSpinBox->value();
+    config.positionTolerance = tolerancePixels;
+    
+    // Se "usar ângulo" não estiver marcado, ignorar ângulo (tolerância muito alta)
+    if (useAngleCheckBox->isChecked()) {
+        config.angleTolerance = angleToleranceSpinBox->value();
+    } else {
+        config.angleTolerance = M_PI;  // 180° - praticamente ignora ângulo
+    }
+    
     config.minMatchScore = minScoreSpinBox->value();
     config.useTypeWeighting = useTypeWeightingCheckBox->isChecked();
     config.useQualityWeighting = useQualityWeightingCheckBox->isChecked();
     
+    // Calcular hint de escala esperada (frag2 / frag1)
+    // Isso ajuda o RANSAC a convergir mais rápido com diferenças grandes de escala
+    if (frag1->pixelsPerMM > 0.1 && frag2->pixelsPerMM > 0.1) {
+        config.scaleHint = frag2->pixelsPerMM / frag1->pixelsPerMM;
+    }
+    
     fprintf(stderr, "\n[COMPARISON] ========== INICIANDO COMPARAÇÃO ==========\n");
-    fprintf(stderr, "[COMPARISON] Fragmento 1: %s (%d minúcias)\n", 
-            frag1->id.toStdString().c_str(), frag1->minutiae.size());
-    fprintf(stderr, "[COMPARISON] Fragmento 2: %s (%d minúcias)\n", 
-            frag2->id.toStdString().c_str(), frag2->minutiae.size());
+    fprintf(stderr, "[COMPARISON] Fragmento 1: %s (%d minúcias, escala=%.2f px/mm)\n", 
+            frag1->id.toStdString().c_str(), frag1->minutiae.size(), frag1->pixelsPerMM);
+    fprintf(stderr, "[COMPARISON] Fragmento 2: %s (%d minúcias, escala=%.2f px/mm)\n", 
+            frag2->id.toStdString().c_str(), frag2->minutiae.size(), frag2->pixelsPerMM);
     fprintf(stderr, "[COMPARISON] Configurações:\n");
-    fprintf(stderr, "[COMPARISON]   - Tolerância posição: %.1f pixels\n", config.positionTolerance);
-    fprintf(stderr, "[COMPARISON]   - Tolerância ângulo: %.3f rad (%.1f°)\n", 
-            config.angleTolerance, config.angleTolerance * 180.0 / M_PI);
+    fprintf(stderr, "[COMPARISON]   - Tolerância posição: %.1f mm (%.1f pixels, escala média=%.2f px/mm)\n", 
+            toleranceMM, tolerancePixels, avgScale);
+    
+    if (useAngleCheckBox->isChecked()) {
+        fprintf(stderr, "[COMPARISON]   - Tolerância ângulo: %.3f rad (%.1f°)\n", 
+                config.angleTolerance, config.angleTolerance * 180.0 / M_PI);
+    } else {
+        fprintf(stderr, "[COMPARISON]   - Ângulo: IGNORADO (não considerado no matching)\n");
+    }
+    
     fprintf(stderr, "[COMPARISON]   - Score mínimo: %.2f\n", config.minMatchScore);
     fprintf(stderr, "[COMPARISON]   - Usar tipo: %s\n", config.useTypeWeighting ? "SIM" : "NÃO");
     fprintf(stderr, "[COMPARISON]   - Usar qualidade: %s\n", config.useQualityWeighting ? "SIM" : "NÃO");
+    fprintf(stderr, "[COMPARISON]   - Hint de escala: %.3f (razão %.2f:%.2f px/mm)\n", 
+            config.scaleHint, frag1->pixelsPerMM, frag2->pixelsPerMM);
     fprintf(stderr, "[COMPARISON] ==============================================\n\n");
     
     // Executar comparação em thread separada
@@ -478,6 +709,9 @@ void FragmentComparisonDialog::displayResults(const FragmentComparisonResult& re
     // Tempo
     resultTimeLabel->setText(QString("Tempo de Cálculo: %1 ms")
         .arg(result.executionTimeMs, 0, 'f', 1));
+    
+    // Habilitar botão de visualização se houver correspondências
+    visualizeButton->setEnabled(result.matchedMinutiae > 0);
 }
 
 QString FragmentComparisonDialog::getInterpretationText(double logLR) {

@@ -7,6 +7,7 @@
 #include <QLabel>
 #include <QFormLayout>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include "../core/ProjectModel.h"
 
 namespace FingerprintEnhancer {
@@ -22,10 +23,14 @@ public:
     ~FragmentPropertiesDialog() = default;
 
     QString getComments() const { return commentsEdit->toPlainText(); }
+    double getPixelsPerMM() const;
 
 private:
     void setupUI();
     void loadData();
+    void saveData();
+    void updateDpiFromScale();
+    void updateScaleFromDpi();
 
     Fragment* fragment;
     
@@ -39,8 +44,14 @@ private:
     
     // Widgets editáveis
     QTextEdit *commentsEdit;
+    QDoubleSpinBox *scaleSpinBox;  // Escala em pixels/mm
+    QDoubleSpinBox *dpiSpinBox;    // Escala em DPI
     
     QDialogButtonBox *buttonBox;
+    
+private slots:
+    void onScaleChanged(double value);
+    void onDpiChanged(double value);
 };
 
 } // namespace FingerprintEnhancer

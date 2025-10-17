@@ -3012,6 +3012,26 @@ void MainWindow::onCalibrationCompleted(double scale, double confidence) {
     // Aplicar escala
     imageProcessor->setScale(scale);
     
+    // SALVAR ESCALA NO FRAGMENTO (se estiver calibrando um fragmento)
+    QString activeEntityId = activePanel ? rightPanelEntityId : leftPanelEntityId;
+    CurrentEntityType activeEntityType = activePanel ? rightPanelEntityType : leftPanelEntityType;
+    
+    bool savedToFragment = false;
+    FingerprintEnhancer::ProjectManager& pm = FingerprintEnhancer::ProjectManager::instance();
+    if (activeEntityType == ENTITY_FRAGMENT && pm.hasOpenProject()) {
+        FingerprintEnhancer::Project* proj = pm.getCurrentProject();
+        FingerprintEnhancer::Fragment* fragment = proj ? proj->findFragment(activeEntityId) : nullptr;
+        if (fragment) {
+            fragment->pixelsPerMM = scale;
+            fragment->dpi = scale * 25.4;  // Salvar DPI também
+            fragment->modifiedAt = QDateTime::currentDateTime();
+            proj->setModified();
+            savedToFragment = true;
+            fprintf(stderr, "[CALIBRATION] Escala %.2f px/mm (%.1f DPI) salva no fragmento %s\n",
+                    scale, fragment->dpi, fragment->id.toStdString().c_str());
+        }
+    }
+    
     // Atualizar réguas com nova escala
     if (leftTopRuler) leftTopRuler->setScale(scale);
     if (leftLeftRuler) leftLeftRuler->setScale(scale);
@@ -3020,21 +3040,28 @@ void MainWindow::onCalibrationCompleted(double scale, double confidence) {
     
     // Mostrar resultado
     double dpi = scale * 25.4;
+    QString contextInfo = savedToFragment ? 
+        "\n\n✓ Escala salva no fragmento" : 
+        "\n\n⚠️ Calibração em imagem digital (não salva no fragmento)";
+    
     QString message = QString(
         "✓ Calibração concluída com sucesso!\n\n"
         "Escala: %1 pixels/mm\n"
         "Resolução: %2 DPI\n"
-        "Confiança: %3%\n\n"
-        "A escala foi aplicada e as réguas foram atualizadas.")
+        "Confiança: %3%%"
+        "%4\n\n"
+        "As réguas foram atualizadas.")
         .arg(scale, 0, 'f', 2)
         .arg(dpi, 0, 'f', 0)
-        .arg(confidence, 0, 'f', 0);
+        .arg(confidence, 0, 'f', 0)
+        .arg(contextInfo);
     
     QMessageBox::information(this, "Calibração Concluída", message);
     
-    statusLabel->setText(QString("Escala calibrada: %1 px/mm (%2 DPI)")
+    statusLabel->setText(QString("Escala calibrada: %1 px/mm (%2 DPI)%3")
                         .arg(scale, 0, 'f', 2)
-                        .arg(dpi, 0, 'f', 0));
+                        .arg(dpi, 0, 'f', 0)
+                        .arg(savedToFragment ? " [Fragmento]" : ""));
     
     // Sugerir exibir réguas se estiverem ocultas
     if (!rulersVisible) {

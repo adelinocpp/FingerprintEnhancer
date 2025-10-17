@@ -8,7 +8,7 @@
 // ========================================================================================================
 // ESTRUTURA DO OVERLAY DE FRAGMENTOS
 // ========================================================================================================
-// 
+// APS:
 // OBJETOS PRINCIPAIS:
 // 1. currentImage->originalImage    : cv::Mat - Imagem ORIGINAL (sem rotações, tamanho original)
 // 2. currentImage->workingImage     : cv::Mat - Imagem ATUAL (pode estar rotacionada e com borda branca)
@@ -116,6 +116,7 @@ void FragmentRegionsOverlay::drawFragmentRegion(QPainter& painter,
     if (!fragment || !currentImage) return;
 
     // ============================================================================================
+    // APS:
     // TODO: calcular posições dos fragmentos - INÍCIO DA FUNÇÃO DE DESENHO
     // ============================================================================================
     // Esta função é chamada para cada fragmento para desenhar seu retângulo na tela.
@@ -142,6 +143,7 @@ void FragmentRegionsOverlay::drawFragmentRegion(QPainter& painter,
             (previewRotationAngle >= 0.0) ? "SIM" : "NAO");
     
     // ============================================================================================
+    // PS:
     // TODO: calcular posições dos fragmentos - TRANSFORMAÇÃO PARA ÂNGULOS ARBITRÁRIOS
     // ============================================================================================
     // Para ângulos arbitrários (não múltiplos de 90°), precisa calcular onde os 4 cantos
@@ -240,6 +242,7 @@ void FragmentRegionsOverlay::drawPolygonAndLabel(QPainter& painter, const QPolyg
 QPolygonF FragmentRegionsOverlay::calculateRotatedPolygon(const QRect& originalRect, double angleDeg,
                                                             const QSize& originalSize, const QSize& rotatedSize) {
     // ============================================================================================
+    // APS:
     // TODO: calcular posições dos fragmentos - TRANSFORMAÇÃO DE COORDENADAS
     // ============================================================================================
     // OBJETIVO: Transformar os 4 cantos do originalRect (em coords da imagem original) para

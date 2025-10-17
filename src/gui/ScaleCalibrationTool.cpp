@@ -5,6 +5,7 @@
 #include <QFontMetrics>
 #include <QApplication>
 #include <cmath>
+#include <algorithm>
 
 ScaleCalibrationTool::ScaleCalibrationTool(QWidget *parent)
     : QWidget(parent),
@@ -96,11 +97,17 @@ double ScaleCalibrationTool::getCalculatedScale() const
         return 0.0;
     }
     
+    // Reordenar pontos antes de calcular
+    QVector<QPoint> orderedMarkers = reorderRidgeMarkers();
+    
+    // Recalcular distância usando pontos reordenados
+    double realPixelDistance = calculateProjectedDistance(orderedMarkers);
+    
     // Distância real = (número de cristas - 1) * espaçamento médio
     double realDistanceMM = (ridgeCount - 1) * defaultRidgeSpacing;
     
     // Escala = pixels / mm
-    return pixelDistance / realDistanceMM;
+    return realPixelDistance / realDistanceMM;
 }
 
 bool ScaleCalibrationTool::hasValidCalibration() const
@@ -646,4 +653,89 @@ void ScaleCalibrationTool::removeRidgeMarker(int index)
         emit ridgeCountChanged(ridgeCount);
         update();
     }
+}
+
+QVector<QPoint> ScaleCalibrationTool::reorderRidgeMarkers() const
+{
+    if (ridgeMarkers.size() < 2) {
+        return ridgeMarkers;
+    }
+    
+    // Vetor da linha base
+    QPointF lineVec(lineEnd.x() - lineStart.x(), lineEnd.y() - lineStart.y());
+    double lineLength = std::sqrt(lineVec.x() * lineVec.x() + lineVec.y() * lineVec.y());
+    
+    if (lineLength < 1.0) {
+        return ridgeMarkers;
+    }
+    
+    // Normalizar vetor da linha
+    QPointF lineDir = lineVec / lineLength;
+    
+    // Calcular projeção de cada ponto na linha base
+    QVector<QPair<double, QPoint>> projections;
+    
+    for (const QPoint& marker : ridgeMarkers) {
+        // Vetor do início da linha até o ponto
+        QPointF toMarker(marker.x() - lineStart.x(), marker.y() - lineStart.y());
+        
+        // Produto escalar para obter projeção na linha
+        double projection = toMarker.x() * lineDir.x() + toMarker.y() * lineDir.y();
+        
+        projections.append(qMakePair(projection, marker));
+    }
+    
+    // Ordenar por projeção (distância ao longo da linha)
+    std::sort(projections.begin(), projections.end(),
+              [](const QPair<double, QPoint>& a, const QPair<double, QPoint>& b) {
+                  return a.first < b.first;
+              });
+    
+    // Extrair pontos ordenados
+    QVector<QPoint> ordered;
+    for (const auto& pair : projections) {
+        ordered.append(pair.second);
+    }
+    
+    fprintf(stderr, "[CALIBRATION] Pontos reordenados por projeção na linha base\n");
+    for (int i = 0; i < ordered.size(); ++i) {
+        fprintf(stderr, "  Crista %d: (%d,%d) → projeção %.1f px\n",
+                i + 1, ordered[i].x(), ordered[i].y(), projections[i].first);
+    }
+    
+    return ordered;
+}
+
+double ScaleCalibrationTool::calculateProjectedDistance(const QVector<QPoint>& orderedMarkers) const
+{
+    if (orderedMarkers.size() < 2) {
+        return 0.0;
+    }
+    
+    // Vetor da linha base
+    QPointF lineVec(lineEnd.x() - lineStart.x(), lineEnd.y() - lineStart.y());
+    double lineLength = std::sqrt(lineVec.x() * lineVec.x() + lineVec.y() * lineVec.y());
+    
+    if (lineLength < 1.0) {
+        return 0.0;
+    }
+    
+    // Normalizar vetor da linha
+    QPointF lineDir = lineVec / lineLength;
+    
+    // Calcular projeção do primeiro e último ponto
+    QPointF toFirst(orderedMarkers.first().x() - lineStart.x(),
+                    orderedMarkers.first().y() - lineStart.y());
+    QPointF toLast(orderedMarkers.last().x() - lineStart.x(),
+                   orderedMarkers.last().y() - lineStart.y());
+    
+    double projFirst = toFirst.x() * lineDir.x() + toFirst.y() * lineDir.y();
+    double projLast = toLast.x() * lineDir.x() + toLast.y() * lineDir.y();
+    
+    double distance = std::abs(projLast - projFirst);
+    
+    fprintf(stderr, "[CALIBRATION] Distância projetada: %.2f pixels (do ponto 1 ao %lld)\n",
+            distance, (long long)orderedMarkers.size());
+    
+    return distance;
 }

@@ -56,9 +56,11 @@ class FragmentComparisonDialog : public QDialog {
 public:
     explicit FragmentComparisonDialog(QWidget *parent = nullptr);
     ~FragmentComparisonDialog();
-
-    // Definir projeto atual
-    void setProject(FingerprintEnhancer::Project* proj);
+    
+    void setProject(FingerprintEnhancer::Project* project);
+    
+protected:
+    bool eventFilter(QObject* obj, QEvent* event) override;
     
     // Pré-selecionar fragmentos (opcional)
     void selectFragments(const QString& fragment1Id, const QString& fragment2Id);
@@ -72,6 +74,13 @@ private slots:
     void onCompareClicked();
     void onComparisonFinished();
     void onSwapFragments();
+    void onVisualizeClicked();
+    
+    // Sincronização de overlays com zoom/scroll
+    void onViewer1ZoomChanged(double factor);
+    void onViewer2ZoomChanged(double factor);
+    void syncOverlay1();
+    void syncOverlay2();
     
 private:
     // UI Components
@@ -79,11 +88,13 @@ private:
     QComboBox* fragment2Combo;
     QPushButton* swapButton;
     QPushButton* compareButton;
+    QPushButton* visualizeButton;
     QPushButton* closeButton;
     QProgressBar* progressBar;
     
     // Campos de configuração
     QDoubleSpinBox* positionToleranceSpinBox;
+    QCheckBox* useAngleCheckBox;
     QDoubleSpinBox* angleToleranceSpinBox;
     QDoubleSpinBox* minScoreSpinBox;
     QCheckBox* useTypeWeightingCheckBox;

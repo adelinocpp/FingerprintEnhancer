@@ -110,6 +110,10 @@ private:
     void drawResultsPanel(QPainter& painter);
     void autoDetectRidges();
     double estimateConfidence() const;
+    
+    // Reordenação de pontos
+    QVector<QPoint> reorderRidgeMarkers() const;
+    double calculateProjectedDistance(const QVector<QPoint>& orderedMarkers) const;
 };
 
 #endif // SCALECALIBRATIONTOOL_H

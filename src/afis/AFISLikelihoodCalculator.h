@@ -13,18 +13,20 @@ namespace FingerprintEnhancer {
  * @brief Configurações para cálculo de Likelihood Ratio
  */
 struct AFISLikelihoodConfig {
-    double positionTolerance;       // Tolerância de posição em pixels (padrão: 15.0)
-    double angleTolerance;          // Tolerância de ângulo em radianos (padrão: 0.3)
-    double minMatchScore;           // Score mínimo para considerar match (padrão: 0.5)
-    bool useTypeWeighting;          // Usar peso de tipo de minúcia (padrão: true)
-    bool useQualityWeighting;       // Usar peso de qualidade (padrão: true)
+    double positionTolerance;       // Tolerância de posição em pixels (padrão: ~120px = 3mm @ 40px/mm)
+    double angleTolerance;          // Tolerância de ângulo em radianos (padrão: π = ignorar)
+    double minMatchScore;           // Score mínimo para considerar match (padrão: 0.0 = aceitar todos)
+    bool useTypeWeighting;          // Usar peso de tipo de minúcia (padrão: false)
+    bool useQualityWeighting;       // Usar peso de qualidade (padrão: false)
+    double scaleHint;               // Hint de escala esperada (padrão: 1.0 = mesma escala)
     
     AFISLikelihoodConfig()
-        : positionTolerance(15.0),
-          angleTolerance(0.3),
-          minMatchScore(0.5),
-          useTypeWeighting(true),
-          useQualityWeighting(true) {}
+        : positionTolerance(120.0),
+          angleTolerance(3.14159265358979323846),  // M_PI
+          minMatchScore(0.0),
+          useTypeWeighting(false),
+          useQualityWeighting(false),
+          scaleHint(1.0) {}
 };
 
 /**
@@ -65,7 +67,20 @@ public:
     // ==================== FUNÇÕES PRINCIPAIS ====================
     
     /**
+     * @brief Estrutura para transformação geométrica (alinhamento)
+     */
+    struct GeometricTransform {
+        double rotation;      // Rotação em radianos
+        QPointF translation;  // Translação (dx, dy)
+        double scale;         // Escala (padrão: 1.0)
+        double confidence;    // Confiança na transformação (0.0-1.0)
+        
+        GeometricTransform() : rotation(0), translation(0, 0), scale(1.0), confidence(0.0) {}
+    };
+    
+    /**
      * @brief Encontra correspondências entre dois conjuntos de minúcias
+     * Usa algoritmo de alinhamento espacial considerando rotação/translação
      * @param minutiae1 Conjunto de minúcias 1
      * @param minutiae2 Conjunto de minúcias 2
      * @return Vetor de pares (índice em minutiae1, índice em minutiae2)
@@ -73,6 +88,18 @@ public:
     QVector<QPair<int, int>> findCorrespondences(
         const QVector<FingerprintEnhancer::Minutia>& minutiae1,
         const QVector<FingerprintEnhancer::Minutia>& minutiae2) const;
+    
+    /**
+     * @brief Encontra correspondências COM estimativa de transformação geométrica
+     * @param minutiae1 Conjunto de minúcias 1
+     * @param minutiae2 Conjunto de minúcias 2
+     * @param transform [out] Transformação estimada
+     * @return Vetor de pares (índice em minutiae1, índice em minutiae2)
+     */
+    QVector<QPair<int, int>> findCorrespondencesWithAlignment(
+        const QVector<FingerprintEnhancer::Minutia>& minutiae1,
+        const QVector<FingerprintEnhancer::Minutia>& minutiae2,
+        GeometricTransform& transform) const;
     
     /**
      * @brief Calcula score de similaridade local entre duas minúcias
@@ -127,6 +154,7 @@ private:
      * @brief Calcula distância euclidiana entre duas posições
      */
     double calculateDistance(const QPoint& p1, const QPoint& p2) const;
+    double calculateDistance(const QPointF& p1, const QPointF& p2) const;
     
     /**
      * @brief Calcula diferença angular considerando periodicidade
@@ -138,6 +166,34 @@ private:
      * TODO: Integrar com estatísticas de Gomes et al. (2024)
      */
     double getTypeWeight(MinutiaeType type) const;
+    
+    // ==================== ALINHAMENTO GEOMÉTRICO ====================
+    
+    /**
+     * @brief Estima transformação geométrica entre dois conjuntos de minúcias
+     * usando RANSAC com pares de minúcias como hipóteses
+     */
+    GeometricTransform estimateTransform(
+        const QVector<FingerprintEnhancer::Minutia>& minutiae1,
+        const QVector<FingerprintEnhancer::Minutia>& minutiae2) const;
+    
+    /**
+     * @brief Aplica transformação a um ponto
+     */
+    QPointF applyTransform(const QPoint& point, const GeometricTransform& transform) const;
+    
+    /**
+     * @brief Aplica transformação a um ângulo
+     */
+    double applyRotationToAngle(double angle, const GeometricTransform& transform) const;
+    
+    /**
+     * @brief Conta quantas minúcias fazem match após aplicar transformação
+     */
+    int countMatchesAfterTransform(
+        const QVector<FingerprintEnhancer::Minutia>& minutiae1,
+        const QVector<FingerprintEnhancer::Minutia>& minutiae2,
+        const GeometricTransform& transform) const;
 };
 
 #endif // AFISLIKELIHOODCALCULATOR_H

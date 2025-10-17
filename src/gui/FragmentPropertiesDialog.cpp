@@ -46,6 +46,42 @@ void FragmentPropertiesDialog::setupUI() {
     
     mainLayout->addWidget(infoGroup);
     
+    // Grupo de escala
+    QGroupBox *scaleGroup = new QGroupBox("Escala (Calibração)");
+    QFormLayout *scaleLayout = new QFormLayout(scaleGroup);
+    
+    scaleSpinBox = new QDoubleSpinBox();
+    scaleSpinBox->setRange(0.0, 1000.0);
+    scaleSpinBox->setDecimals(2);
+    scaleSpinBox->setSingleStep(0.1);
+    scaleSpinBox->setSuffix(" px/mm");
+    scaleSpinBox->setSpecialValueText("Não definida");
+    scaleSpinBox->setToolTip("Defina a escala medindo uma distância conhecida na imagem.\n"
+                             "Ex: Se 10mm = 78.5 pixels, então escala = 78.5/10 = 7.85 px/mm");
+    scaleLayout->addRow("Pixels por Milímetro:", scaleSpinBox);
+    
+    dpiSpinBox = new QDoubleSpinBox();
+    dpiSpinBox->setRange(0.0, 25400.0);
+    dpiSpinBox->setDecimals(1);
+    dpiSpinBox->setSingleStep(1.0);
+    dpiSpinBox->setSuffix(" DPI");
+    dpiSpinBox->setSpecialValueText("Não definida");
+    dpiSpinBox->setToolTip("Resolução em Dots Per Inch (pontos por polegada).\n"
+                           "Converte automaticamente de/para px/mm (1 polegada = 25.4 mm)");
+    scaleLayout->addRow("Resolução (DPI):", dpiSpinBox);
+    
+    // Conectar os spinboxes para sincronização
+    connect(scaleSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &FragmentPropertiesDialog::onScaleChanged);
+    connect(dpiSpinBox, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+            this, &FragmentPropertiesDialog::onDpiChanged);
+    
+    QLabel *scaleHintLabel = new QLabel("💡 Necessária para comparação 1:1");
+    scaleHintLabel->setStyleSheet("QLabel { color: #666; font-size: 9pt; }");
+    scaleLayout->addRow("", scaleHintLabel);
+    
+    mainLayout->addWidget(scaleGroup);
+    
     // Grupo de comentários
     QGroupBox *commentsGroup = new QGroupBox("Comentários");
     QVBoxLayout *commentsLayout = new QVBoxLayout(commentsGroup);
@@ -59,7 +95,7 @@ void FragmentPropertiesDialog::setupUI() {
     
     // Botões
     buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    connect(buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttonBox, &QDialogButtonBox::accepted, this, &FragmentPropertiesDialog::saveData);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     
     mainLayout->addWidget(buttonBox);
@@ -95,9 +131,68 @@ void FragmentPropertiesDialog::loadData() {
     createdAtLabel->setText(fragment->createdAt.toString("dd/MM/yyyy HH:mm:ss"));
     modifiedAtLabel->setText(fragment->modifiedAt.toString("dd/MM/yyyy HH:mm:ss"));
     
+    // Escala (bloquear sinais para evitar loop)
+    scaleSpinBox->blockSignals(true);
+    dpiSpinBox->blockSignals(true);
+    
+    scaleSpinBox->setValue(fragment->pixelsPerMM);
+    updateDpiFromScale();
+    
+    scaleSpinBox->blockSignals(false);
+    dpiSpinBox->blockSignals(false);
+    
     // Comentários
     commentsEdit->setPlainText(fragment->notes);
     commentsEdit->setFocus();
+}
+
+void FragmentPropertiesDialog::saveData() {
+    if (!fragment) return;
+    
+    // Salvar escala (px/mm e DPI)
+    fragment->pixelsPerMM = scaleSpinBox->value();
+    fragment->dpi = dpiSpinBox->value();
+    
+    // Salvar comentários
+    fragment->notes = commentsEdit->toPlainText();
+    fragment->modifiedAt = QDateTime::currentDateTime();
+    
+    fprintf(stderr, "[FRAGMENT] Escala salva: %.2f px/mm (%.1f DPI)\n", 
+            fragment->pixelsPerMM, fragment->dpi);
+    
+    accept();
+}
+
+double FragmentPropertiesDialog::getPixelsPerMM() const {
+    return scaleSpinBox->value();
+}
+
+void FragmentPropertiesDialog::onScaleChanged(double value) {
+    // Atualizar DPI quando px/mm muda
+    dpiSpinBox->blockSignals(true);
+    updateDpiFromScale();
+    dpiSpinBox->blockSignals(false);
+}
+
+void FragmentPropertiesDialog::onDpiChanged(double value) {
+    // Atualizar px/mm quando DPI muda
+    scaleSpinBox->blockSignals(true);
+    updateScaleFromDpi();
+    scaleSpinBox->blockSignals(false);
+}
+
+void FragmentPropertiesDialog::updateDpiFromScale() {
+    // Conversão: DPI = px/mm * 25.4 (1 inch = 25.4 mm)
+    double pxPerMM = scaleSpinBox->value();
+    double dpi = pxPerMM * 25.4;
+    dpiSpinBox->setValue(dpi);
+}
+
+void FragmentPropertiesDialog::updateScaleFromDpi() {
+    // Conversão: px/mm = DPI / 25.4
+    double dpi = dpiSpinBox->value();
+    double pxPerMM = dpi / 25.4;
+    scaleSpinBox->setValue(pxPerMM);
 }
 
 } // namespace FingerprintEnhancer

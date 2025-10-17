@@ -177,6 +177,8 @@ Makefile
 TESTE_COMPLETO_RESULTADO.md
 .sync.ffs_db
 
+logs
+
 # Ignora todos os arquivos .md
 *.md
 
