@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
     app.setApplicationName("FingerprintEnhancer");
     app.setApplicationVersion("1.0.0");
     app.setApplicationDisplayName("Fingerprint Enhancement Software");
-    app.setOrganizationName("FingerprintEnhancer Project");
+    app.setOrganizationName("FingerprintEnhancer");
     app.setOrganizationDomain("fingerprintenhancer.org");
     
     // Configurar logging - HABILITAR TODOS OS NÍVEIS

@@ -105,7 +105,7 @@ void MinutiaeOverlay::paintEvent(QPaintEvent *event) {
 
         if (showLabels) {
             QString typeAbbr = displaySettings.showLabelType ? minutia.getTypeAbbreviation() : "";
-            drawMinutiaLabel(painter, scaledPos, number, typeAbbr, isSelected, minutia.labelPosition);
+            drawMinutiaLabel(painter, minutia, scaledPos, number, typeAbbr, isSelected);
         }
 
         number++;
@@ -125,7 +125,17 @@ void MinutiaeOverlay::paintEvent(QPaintEvent *event) {
 
 void MinutiaeOverlay::drawMinutia(QPainter& painter, const Minutia& minutia, bool isSelected) {
     QPoint pos = scalePoint(minutia.position);
-    QColor color = isSelected ? selectedColor : normalColor;
+    
+    // Determinar cor da marcação: custom ou global
+    QColor markerColor;
+    if (minutia.useGlobalSettings) {
+        markerColor = displaySettings.markerColor;
+    } else {
+        markerColor = minutia.customMarkerColor;
+    }
+    
+    // Se selecionada, usar cor de seleção
+    QColor color = isSelected ? selectedColor : markerColor;
 
     // Desenhar marcador usando o símbolo configurado
     int size = displaySettings.markerSize;
@@ -227,13 +237,22 @@ void MinutiaeOverlay::drawMinutia(QPainter& painter, const Minutia& minutia, boo
 }
 
 
-void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int number, const QString& type, bool isSelected, MinutiaLabelPosition labelPos) {
+void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const Minutia& minutia, const QPoint& pos, int number, const QString& type, bool isSelected) {
     // Se oculto, não desenhar
-    if (labelPos == MinutiaLabelPosition::HIDDEN) {
+    if (minutia.labelPosition == MinutiaLabelPosition::HIDDEN) {
         return;
     }
     
-    QColor textColor = isSelected ? selectedColor : normalColor;
+    // Determinar cor do texto: custom ou global
+    QColor textColor;
+    QColor bgColor;
+    if (minutia.useGlobalSettings) {
+        textColor = isSelected ? selectedColor : displaySettings.textColor;
+        bgColor = displaySettings.labelBackgroundColor;
+    } else {
+        textColor = isSelected ? selectedColor : minutia.customTextColor;
+        bgColor = minutia.customLabelBgColor;
+    }
     QFont font = painter.font();
     font.setPointSize(displaySettings.labelFontSize);
     font.setBold(isSelected);
@@ -259,9 +278,9 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
     
     QPoint textPos;
     
-    // Calcular posição baseado em labelPos
+    // Calcular posição baseado em minutia.labelPosition
     // Se não há tipo, ajustar para ficar mais próximo da marcação
-    switch (labelPos) {
+    switch (minutia.labelPosition) {
         case MinutiaLabelPosition::RIGHT:
             textPos = QPoint(pos.x() + size/2 + margin, pos.y() - size/2);
             break;
@@ -281,7 +300,7 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
     }
 
     // Fundo configurável para melhor legibilidade
-    painter.fillRect(textRect.translated(textPos), displaySettings.labelBackgroundColor);
+    painter.fillRect(textRect.translated(textPos), bgColor);
     painter.setPen(textColor);
     painter.drawText(textPos, label);
 
@@ -292,7 +311,7 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
         QPoint typePos;
         
         // Tipo sempre em relação ao número
-        switch (labelPos) {
+        switch (minutia.labelPosition) {
             case MinutiaLabelPosition::RIGHT:
                 // Tipo abaixo do número, alinhado à esquerda
                 typePos = QPoint(textPos.x(), textPos.y() + textRect.height() + 2);
@@ -313,7 +332,7 @@ void MinutiaeOverlay::drawMinutiaLabel(QPainter& painter, const QPoint& pos, int
                 typePos = QPoint(textPos.x(), textPos.y() + textRect.height() + 2);
         }
         
-        painter.fillRect(typeRect.translated(typePos), displaySettings.labelBackgroundColor);
+        painter.fillRect(typeRect.translated(typePos), bgColor);
         painter.drawText(typePos, typeLabel);
     }
 }

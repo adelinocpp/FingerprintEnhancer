@@ -159,6 +159,7 @@ projects/test_*
 
 # Claude
 .claude
+.windsurf
 
 # other dirs
 assets

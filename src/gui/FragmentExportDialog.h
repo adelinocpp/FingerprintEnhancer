@@ -60,6 +60,9 @@ public:
     // Exportação
     bool exportImage(QString& errorMessage);
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private slots:
     void onBrowseClicked();
     void onFormatChanged(int index);
@@ -70,11 +73,16 @@ private slots:
     void updatePreview();
     void onMarkerColorClicked();
     void onTextColorClicked();
+    void onLabelBgColorClicked();
+    void onLabelOpacityChanged(int value);
     void onResetToDefaults();
+    void onApplyDefaults();
+    void onPreviewZoomChanged(int value);
 
 private:
     void setupUI();
     void loadDefaultSettings();
+    void saveCurrentSettings();
     void setDefaultExportPath(const QString& directory);
     cv::Mat renderPreview();
     cv::Mat renderExportImage(int width, int height);
@@ -121,28 +129,32 @@ private:
     QSlider *labelOpacitySlider;
     QLabel *labelOpacityLabel;
     QPushButton *labelBgColorButton;
-    QColor labelBgColor;
     
     // Widgets - Cores
     QPushButton *markerColorButton;
     QPushButton *textColorButton;
     QColor markerColor;
     QColor textColor;
+    QColor labelBgColor;
     
     // Widgets - Preview
     QLabel *previewLabel;
     QLabel *infoLabel;
+    QSlider *previewZoomSlider;
+    QLabel *previewZoomLabel;
+    double previewZoomFactor;
     
     // Botões
     QPushButton *exportButton;
     QPushButton *cancelButton;
     QPushButton *resetButton;
+    QPushButton *applyDefaultsButton;
     
     // Dimensões originais
     int originalWidth;
     int originalHeight;
-    bool updatingResolution;
     QString defaultExportDirectory;
+    bool updatingResolution;
     
     // Configurações de visualização
     FingerprintEnhancer::MinutiaeDisplaySettings displaySettings;

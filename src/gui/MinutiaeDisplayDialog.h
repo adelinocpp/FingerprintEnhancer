@@ -32,6 +32,8 @@ struct MinutiaeDisplaySettings {
     MinutiaeSymbol symbol = MinutiaeSymbol::CIRCLE;
     int markerSize = 20;              // Tamanho das marcações (pixels)
     int labelFontSize = 10;           // Tamanho da fonte dos rótulos
+    QColor markerColor = QColor(255, 0, 0);  // Cor da marcação (vermelho padrão)
+    QColor textColor = QColor(255, 0, 0);    // Cor do texto (vermelho padrão)
     QColor labelBackgroundColor = QColor(255, 255, 255, 200);  // Cor de fundo dos rótulos (com alpha)
     int labelBackgroundOpacity = 200; // Opacidade (0-255)
     FingerprintEnhancer::MinutiaLabelPosition defaultLabelPosition = FingerprintEnhancer::MinutiaLabelPosition::RIGHT;  // Posição padrão dos rótulos
@@ -67,17 +69,23 @@ private slots:
     void onMarkerSizeChanged(int value);
     void onLabelFontSizeChanged(int value);
     void onLabelPositionChanged(int index);
+    void onChooseMarkerColor();
+    void onChooseTextColor();
     void onChooseBackgroundColor();
     void onOpacityChanged(int value);
     void onShowLabelTypeChanged(int state);
     void onShowAnglesChanged(int state);
     void onAccepted();
     void onRejected();
+    void onApplyClicked();
     void updatePreview();
 
 private:
     void setupUI();
-    void updateColorButton();
+    void updateMarkerColorButton();
+    void updateTextColorButton();
+    void updateBgColorButton();
+    void saveToGlobalSettings();
 
     MinutiaeDisplaySettings settings;
     bool accepted;
@@ -87,7 +95,9 @@ private:
     QSpinBox* markerSizeSpinBox;
     QSpinBox* labelFontSizeSpinBox;
     QComboBox* labelPositionCombo;
-    QPushButton* colorButton;
+    QPushButton* markerColorButton;
+    QPushButton* textColorButton;
+    QPushButton* bgColorButton;
     QSlider* opacitySlider;
     QLabel* opacityLabel;
     QCheckBox* showLabelTypeCheckBox;

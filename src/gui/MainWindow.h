@@ -427,6 +427,7 @@ private:
     bool checkUnsavedChanges();
     void showProcessingProgress(const QString &operation);
     void hideProcessingProgress();
+    void applyGlobalDisplaySettings();
     QString formatImageInfo(const cv::Size &size, double scale);
     void runProcessingInThread(std::function<cv::Mat(const cv::Mat&, int&)> processingFunc);
     void applyBrightnessContrastRealtime();

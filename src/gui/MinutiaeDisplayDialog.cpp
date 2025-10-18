@@ -1,8 +1,10 @@
 #include "MinutiaeDisplayDialog.h"
+#include "../core/UserSettings.h"
 #include <QGridLayout>
 #include <QSlider>
 #include <QPainter>
 #include <QPixmap>
+#include <QMessageBox>
 
 namespace FingerprintEnhancer {
 
@@ -69,18 +71,33 @@ void MinutiaeDisplayDialog::setupUI() {
 
     mainLayout->addWidget(sizeGroup);
 
+    // Grupo: Cores
+    QGroupBox* colorGroup = new QGroupBox("Cores");
+    QFormLayout* colorLayout = new QFormLayout(colorGroup);
+
+    // Cor da marcação
+    markerColorButton = new QPushButton("Escolher Cor");
+    markerColorButton->setFixedSize(150, 30);
+    updateMarkerColorButton();
+    colorLayout->addRow("Cor da Marcação:", markerColorButton);
+
+    // Cor do texto
+    textColorButton = new QPushButton("Escolher Cor");
+    textColorButton->setFixedSize(150, 30);
+    updateTextColorButton();
+    colorLayout->addRow("Cor do Texto:", textColorButton);
+
+    // Cor de fundo do rótulo
+    bgColorButton = new QPushButton("Escolher Cor");
+    bgColorButton->setFixedSize(150, 30);
+    updateBgColorButton();
+    colorLayout->addRow("Cor de Fundo Rótulo:", bgColorButton);
+
+    mainLayout->addWidget(colorGroup);
+
     // Grupo: Aparência dos Rótulos
     QGroupBox* labelGroup = new QGroupBox("Aparência dos Rótulos");
     QVBoxLayout* labelLayout = new QVBoxLayout(labelGroup);
-
-    QHBoxLayout* colorLayout = new QHBoxLayout();
-    colorLayout->addWidget(new QLabel("Cor de Fundo:"));
-    colorButton = new QPushButton();
-    colorButton->setFixedSize(100, 30);
-    updateColorButton();
-    colorLayout->addWidget(colorButton);
-    colorLayout->addStretch();
-    labelLayout->addLayout(colorLayout);
 
     QHBoxLayout* opacityLayout = new QHBoxLayout();
     opacityLayout->addWidget(new QLabel("Opacidade:"));
@@ -114,7 +131,8 @@ void MinutiaeDisplayDialog::setupUI() {
     mainLayout->addWidget(previewGroup);
 
     // Botões
-    buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Apply | QDialogButtonBox::Cancel);
+    buttonBox->button(QDialogButtonBox::Apply)->setText("Aplicar");
     mainLayout->addWidget(buttonBox);
 
     // Conectar sinais
@@ -122,7 +140,9 @@ void MinutiaeDisplayDialog::setupUI() {
     connect(markerSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onMarkerSizeChanged);
     connect(labelFontSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onLabelFontSizeChanged);
     connect(labelPositionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MinutiaeDisplayDialog::onLabelPositionChanged);
-    connect(colorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseBackgroundColor);
+    connect(markerColorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseMarkerColor);
+    connect(textColorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseTextColor);
+    connect(bgColorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseBackgroundColor);
     connect(opacitySlider, &QSlider::valueChanged, this, &MinutiaeDisplayDialog::onOpacityChanged);
     
     // CRÍTICO: Conectar checkboxes para atualização em tempo real
@@ -131,6 +151,8 @@ void MinutiaeDisplayDialog::setupUI() {
     
     connect(buttonBox, &QDialogButtonBox::accepted, this, &MinutiaeDisplayDialog::onAccepted);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &MinutiaeDisplayDialog::onRejected);
+    connect(buttonBox->button(QDialogButtonBox::Apply), &QPushButton::clicked, 
+            this, &MinutiaeDisplayDialog::onApplyClicked);
 
     // Atualizar preview inicial
     updatePreview();
@@ -156,12 +178,30 @@ void MinutiaeDisplayDialog::onLabelPositionChanged(int index) {
     updatePreview();
 }
 
+void MinutiaeDisplayDialog::onChooseMarkerColor() {
+    QColor color = QColorDialog::getColor(settings.markerColor, this, "Escolher Cor da Marcação");
+    if (color.isValid()) {
+        settings.markerColor = color;
+        updateMarkerColorButton();
+        updatePreview();
+    }
+}
+
+void MinutiaeDisplayDialog::onChooseTextColor() {
+    QColor color = QColorDialog::getColor(settings.textColor, this, "Escolher Cor do Texto");
+    if (color.isValid()) {
+        settings.textColor = color;
+        updateTextColorButton();
+        updatePreview();
+    }
+}
+
 void MinutiaeDisplayDialog::onChooseBackgroundColor() {
-    QColor color = QColorDialog::getColor(settings.labelBackgroundColor, this, "Escolher Cor de Fundo");
+    QColor color = QColorDialog::getColor(settings.labelBackgroundColor, this, "Escolher Cor de Fundo do Rótulo");
     if (color.isValid()) {
         settings.labelBackgroundColor = color;
         settings.labelBackgroundColor.setAlpha(settings.labelBackgroundOpacity);
-        updateColorButton();
+        updateBgColorButton();
         updatePreview();
     }
 }
@@ -170,11 +210,13 @@ void MinutiaeDisplayDialog::onOpacityChanged(int value) {
     settings.labelBackgroundOpacity = value;
     settings.labelBackgroundColor.setAlpha(value);
     opacityLabel->setText(QString("%1%").arg(int(value * 100.0 / 255.0)));
-    updateColorButton();
+    updateBgColorButton();
     updatePreview();
 }
 
 void MinutiaeDisplayDialog::onAccepted() {
+    // Salvar ao aceitar (OK)
+    saveToGlobalSettings();
     accepted = true;
     accept();
 }
@@ -182,6 +224,41 @@ void MinutiaeDisplayDialog::onAccepted() {
 void MinutiaeDisplayDialog::onRejected() {
     accepted = false;
     reject();
+}
+
+void MinutiaeDisplayDialog::onApplyClicked() {
+    // Salvar sem fechar o diálogo
+    saveToGlobalSettings();
+    QMessageBox::information(this, "Configurações Aplicadas", 
+                            "As configurações foram salvas como padrão global.");
+}
+
+void MinutiaeDisplayDialog::saveToGlobalSettings() {
+    auto& userSettings = FingerprintEnhancer::UserSettings::instance();
+    
+    // Salvar TODAS as configurações de visualização
+    userSettings.setViewMarkerColor(settings.markerColor);
+    userSettings.setViewTextColor(settings.textColor);
+    userSettings.setViewLabelBgColor(settings.labelBackgroundColor);
+    userSettings.setViewMarkerSize(settings.markerSize);
+    userSettings.setViewFontSize(settings.labelFontSize);
+    userSettings.setViewLabelOpacity(settings.labelBackgroundOpacity * 100 / 255); // Converter 0-255 para 0-100
+    userSettings.setViewShowNumbers(true); // Sempre true na visualização
+    userSettings.setViewShowTypes(settings.showLabelType);
+    userSettings.setViewShowAngles(settings.showAngles);
+    userSettings.setViewLabelPosition(static_cast<int>(settings.defaultLabelPosition));
+    userSettings.setViewSymbol(static_cast<int>(settings.symbol));
+    
+    // Gravar no arquivo .ini
+    userSettings.save();
+    
+    fprintf(stderr, "[USER_SETTINGS] Configurações de visualização salvas:\n");
+    fprintf(stderr, "  - Marcação: rgb(%d,%d,%d)\n", 
+            settings.markerColor.red(), settings.markerColor.green(), settings.markerColor.blue());
+    fprintf(stderr, "  - Texto: rgb(%d,%d,%d)\n",
+            settings.textColor.red(), settings.textColor.green(), settings.textColor.blue());
+    fprintf(stderr, "  - Tamanho: %d px, Fonte: %d pt\n",
+            settings.markerSize, settings.labelFontSize);
 }
 
 void MinutiaeDisplayDialog::onShowLabelTypeChanged(int state) {
@@ -194,13 +271,32 @@ void MinutiaeDisplayDialog::onShowAnglesChanged(int state) {
     updatePreview();
 }
 
-void MinutiaeDisplayDialog::updateColorButton() {
-    QString colorStyle = QString("background-color: rgba(%1, %2, %3, %4);")
+void MinutiaeDisplayDialog::updateMarkerColorButton() {
+    QString colorStyle = QString("background-color: rgb(%1, %2, %3); color: %4;")
+        .arg(settings.markerColor.red())
+        .arg(settings.markerColor.green())
+        .arg(settings.markerColor.blue())
+        .arg(settings.markerColor.lightness() > 128 ? "black" : "white");
+    markerColorButton->setStyleSheet(colorStyle);
+}
+
+void MinutiaeDisplayDialog::updateTextColorButton() {
+    QString colorStyle = QString("background-color: rgb(%1, %2, %3); color: %4;")
+        .arg(settings.textColor.red())
+        .arg(settings.textColor.green())
+        .arg(settings.textColor.blue())
+        .arg(settings.textColor.lightness() > 128 ? "black" : "white");
+    textColorButton->setStyleSheet(colorStyle);
+}
+
+void MinutiaeDisplayDialog::updateBgColorButton() {
+    QString colorStyle = QString("background-color: rgba(%1, %2, %3, %4); color: %5;")
         .arg(settings.labelBackgroundColor.red())
         .arg(settings.labelBackgroundColor.green())
         .arg(settings.labelBackgroundColor.blue())
-        .arg(settings.labelBackgroundOpacity);
-    colorButton->setStyleSheet(colorStyle);
+        .arg(settings.labelBackgroundOpacity)
+        .arg(settings.labelBackgroundColor.lightness() > 128 ? "black" : "white");
+    bgColorButton->setStyleSheet(colorStyle);
 }
 
 void MinutiaeDisplayDialog::updatePreview() {
@@ -216,8 +312,8 @@ void MinutiaeDisplayDialog::updatePreview() {
     int size = settings.markerSize;
     double angle = 45.0; // Ângulo de exemplo
 
-    // Desenhar símbolo
-    painter.setPen(QPen(QColor(0, 0, 255), 2));
+    // Desenhar símbolo com cor da marcação
+    painter.setPen(QPen(settings.markerColor, 2));
     painter.setBrush(Qt::NoBrush);
 
     switch (settings.symbol) {
@@ -336,9 +432,9 @@ void MinutiaeDisplayDialog::updatePreview() {
                 numberPos = QPoint(center.x() + size/2 + margin, center.y() - size/2);
         }
 
-        // Desenhar rótulo de número
+        // Desenhar rótulo de número com cor do texto
         painter.fillRect(numberRect.translated(numberPos), settings.labelBackgroundColor);
-        painter.setPen(Qt::black);
+        painter.setPen(settings.textColor);
         painter.drawText(numberPos, numberText);
 
         // Desenhar rótulo de tipo (se habilitado)

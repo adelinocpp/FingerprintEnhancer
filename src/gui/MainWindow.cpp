@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "core/ProjectManager.h"
+#include "core/UserSettings.h"
 
 // Definir categoria de logging
 Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
@@ -89,6 +90,9 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     connectSignals();
     updateWindowTitle();
+    
+    // Carregar configurações globais de visualização ao iniciar
+    applyGlobalDisplaySettings();
 
     // Timer para atualizações periódicas da interface
     updateTimer->setSingleShot(false);
@@ -1086,6 +1090,9 @@ void MainWindow::openProject() {
             // Atualizar FragmentManager
             fragmentManager->setProject(PM::instance().getCurrentProject());
             
+            // Aplicar configurações globais de visualização
+            applyGlobalDisplaySettings();
+            
             statusLabel->setText("✅ Projeto aberto: " + QFileInfo(fileName).fileName());
             updateWindowTitle();
             fprintf(stderr, "[OPEN_PROJECT] Concluído - painéis atualizados\n");
@@ -1859,6 +1866,20 @@ void MainWindow::toggleRightPanel() {
 
 void MainWindow::configureMinutiaeDisplay() {
     using namespace FingerprintEnhancer;
+
+    // Carregar configurações salvas do UserSettings
+    auto& userSettings = UserSettings::instance();
+    minutiaeDisplaySettings.markerColor = userSettings.getViewMarkerColor();
+    minutiaeDisplaySettings.textColor = userSettings.getViewTextColor();
+    minutiaeDisplaySettings.labelBackgroundColor = userSettings.getViewLabelBgColor();
+    minutiaeDisplaySettings.markerSize = userSettings.getViewMarkerSize();
+    minutiaeDisplaySettings.labelFontSize = userSettings.getViewFontSize();
+    minutiaeDisplaySettings.labelBackgroundOpacity = userSettings.getViewLabelOpacity() * 255 / 100; // Converter 0-100 para 0-255
+    minutiaeDisplaySettings.labelBackgroundColor.setAlpha(minutiaeDisplaySettings.labelBackgroundOpacity);
+    minutiaeDisplaySettings.showLabelType = userSettings.getViewShowTypes();
+    minutiaeDisplaySettings.showAngles = userSettings.getViewShowAngles();
+    minutiaeDisplaySettings.defaultLabelPosition = static_cast<MinutiaLabelPosition>(userSettings.getViewLabelPosition());
+    minutiaeDisplaySettings.symbol = static_cast<MinutiaeSymbol>(userSettings.getViewSymbol());
 
     MinutiaeDisplayDialog dialog(minutiaeDisplaySettings, this);
     if (dialog.exec() == QDialog::Accepted && dialog.wasAccepted()) {
@@ -4678,10 +4699,37 @@ void MainWindow::onExportImageRequested(const QString& imageId) {
 }
 
 void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
-    // TODO: Implementar exportação avançada com FragmentExportDialog
-    QMessageBox::information(this, "Exportar Fragmento", 
-        "Funcionalidade de exportação avançada temporariamente desativada.\n"
-        "Use o botão Exportar do menu principal.");
+    using PM = FingerprintEnhancer::ProjectManager;
+    
+    // Buscar fragmento
+    FingerprintEnhancer::Fragment* frag = PM::instance().getCurrentProject()->findFragment(fragmentId);
+    if (!frag) {
+        QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
+        return;
+    }
+    
+    // Verificar se tem imagem
+    if (frag->workingImage.empty()) {
+        QMessageBox::warning(this, "Erro", 
+            "Fragmento não possui imagem para exportar.\n"
+            "Certifique-se de que o fragmento está carregado.");
+        return;
+    }
+    
+    // Abrir diálogo de exportação
+    QString projectDir = getProjectDirectory();
+    FragmentExportDialog dialog(frag, 1.0, this, projectDir);
+    if (dialog.exec() == QDialog::Accepted) {
+        QString errorMessage;
+        if (dialog.exportImage(errorMessage)) {
+            statusLabel->setText(QString("Fragmento exportado: %1").arg(dialog.getFilePath()));
+            QMessageBox::information(this, "Sucesso", 
+                QString("Fragmento exportado com sucesso!\n\n%1").arg(dialog.getFilePath()));
+        } else {
+            QMessageBox::critical(this, "Erro ao Exportar", 
+                QString("Não foi possível exportar o fragmento:\n%1").arg(errorMessage));
+        }
+    }
 }
 
 void MainWindow::onEditImagePropertiesRequested(const QString& imageId) {
@@ -4943,6 +4991,25 @@ void MainWindow::onAllImagesLoaded(int successCount, int failCount) {
     isLoadingImages = false;
     progressBar->setVisible(false);
     
+    // Selecionar e exibir a primeira imagem automaticamente
+    using namespace FingerprintEnhancer;
+    ProjectManager& pm = ProjectManager::instance();
+    if (pm.hasOpenProject() && successCount > 0) {
+        Project* proj = pm.getCurrentProject();
+        if (proj && !proj->images.isEmpty()) {
+            FingerprintImage& firstImage = proj->images.first();
+            fprintf(stderr, "[AUTO_SELECT] Selecionando primeira imagem: %s\n", 
+                    firstImage.originalFilePath.toStdString().c_str());
+            
+            // Exibir imagem no painel esquerdo
+            processedImageViewer->setImage(firstImage.workingImage);
+            currentEntityType = ENTITY_IMAGE;
+            currentEntityId = firstImage.id;
+            leftPanelEntityType = ENTITY_IMAGE;
+            leftPanelEntityId = firstImage.id;
+        }
+    }
+    
     QString message;
     if (failCount == 0) {
         message = QString("✓ %1 imagem(ns) carregada(s) com sucesso!").arg(successCount);
@@ -4988,4 +5055,40 @@ void MainWindow::onSaveTimeout() {
     QMessageBox::critical(this, "Timeout",
                          "O salvamento do projeto demorou mais de 5 minutos e foi cancelado.\n"
                          "Isso pode indicar um projeto muito grande ou problemas no disco.");
+}
+
+void MainWindow::applyGlobalDisplaySettings() {
+    using namespace FingerprintEnhancer;
+    
+    auto& settings = UserSettings::instance();
+    
+    // Carregar todas as configurações de visualização do UserSettings
+    minutiaeDisplaySettings.markerColor = settings.getViewMarkerColor();
+    minutiaeDisplaySettings.textColor = settings.getViewTextColor();
+    minutiaeDisplaySettings.labelBackgroundColor = settings.getViewLabelBgColor();
+    minutiaeDisplaySettings.markerSize = settings.getViewMarkerSize();
+    minutiaeDisplaySettings.labelFontSize = settings.getViewFontSize();
+    minutiaeDisplaySettings.labelBackgroundOpacity = settings.getViewLabelOpacity() * 255 / 100; // Converter 0-100 para 0-255
+    minutiaeDisplaySettings.labelBackgroundColor.setAlpha(minutiaeDisplaySettings.labelBackgroundOpacity);
+    minutiaeDisplaySettings.showLabelType = settings.getViewShowTypes();
+    minutiaeDisplaySettings.showAngles = settings.getViewShowAngles();
+    minutiaeDisplaySettings.defaultLabelPosition = static_cast<MinutiaLabelPosition>(settings.getViewLabelPosition());
+    minutiaeDisplaySettings.symbol = static_cast<MinutiaeSymbol>(settings.getViewSymbol());
+    
+    // Aplicar configurações aos overlays
+    if (leftMinutiaeOverlay) {
+        leftMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
+    }
+    if (rightMinutiaeOverlay) {
+        rightMinutiaeOverlay->setDisplaySettings(minutiaeDisplaySettings);
+    }
+    
+    fprintf(stderr, "[USER_SETTINGS] Configurações globais de visualização aplicadas ao projeto\n");
+    fprintf(stderr, "[USER_SETTINGS] Marcação: rgb(%d,%d,%d), Texto: rgb(%d,%d,%d)\n",
+            settings.getViewMarkerColor().red(),
+            settings.getViewMarkerColor().green(),
+            settings.getViewMarkerColor().blue(),
+            settings.getViewTextColor().red(),
+            settings.getViewTextColor().green(),
+            settings.getViewTextColor().blue());
 }
