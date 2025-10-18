@@ -259,6 +259,9 @@ private slots:
     void loadCurrentEntityToView();
     cv::Mat& getCurrentWorkingImage();  // Retorna referência para workingImage da entidade corrente
     void applyOperationToCurrentEntity(std::function<void(cv::Mat&)> operation);
+    void applyOperationToCurrentEntity(std::function<void(cv::Mat&)> operation, 
+                                       FingerprintEnhancer::ProcessingOperationType opType,
+                                       const QString& params);
     
     // Funções auxiliares para conversão de coordenadas com rotação
     QRect convertRotatedToOriginalCoords(const QRect& rotatedRect, double currentAngle, 
@@ -287,6 +290,8 @@ private slots:
     void onResetWorkingRequested(const QString& entityId, bool isFragment);
     void onDeleteFragmentRequested(const QString& fragmentId);
     void onDeleteMinutiaRequested(const QString& minutiaId);
+    void onDeleteAllMinutiaeRequested(const QString& fragmentId);
+    void onEditMinutiaPropertiesRequested(const QString& minutiaId);
     
     // Gerenciamento de estados do programa
     void setProgramState(ProgramState newState);

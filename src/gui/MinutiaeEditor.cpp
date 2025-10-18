@@ -350,7 +350,20 @@ QPoint MinutiaeEditor::widgetToMinutia(const QPoint &widgetPoint) const {
 }
 
 void MinutiaeEditor::updateMinutiaAngles() {
-    // TODO: Implementar cálculo automático de ângulos
+    /**
+     * Cálculo automático de ângulos de minúcias
+     * 
+     * Esta função seria usada para calcular automaticamente o ângulo de cada minúcia
+     * baseado na orientação local das cristas da impressão digital.
+     * 
+     * Algoritmo sugerido:
+     * 1. Para cada minúcia, extrair uma janela local ao redor da posição
+     * 2. Calcular o campo de orientação local usando gradientes
+     * 3. Usar a orientação dominante como ângulo da minúcia
+     * 
+     * Nota: Atualmente não implementado pois os usuários definem ângulos manualmente
+     */
+    fprintf(stderr, "[MINUTIAE_EDITOR] updateMinutiaAngles: Função não implementada\n");
 }
 
 int MinutiaeEditor::getNextMinutiaId() const {

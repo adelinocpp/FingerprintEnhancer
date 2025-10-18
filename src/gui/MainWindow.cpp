@@ -28,6 +28,7 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include <QtWidgets/QGridLayout>
 #include <QtWidgets/QDialogButtonBox>
 #include <QtWidgets/QScrollBar>
+#include <QRegularExpression>
 #include <QtGui/QActionGroup>
 #include <QtGui/QMouseEvent>
 #include <QtCore/QStandardPaths>
@@ -673,6 +674,10 @@ void MainWindow::connectSignals() {
             this, &MainWindow::onMinutiaDoubleClicked);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteMinutiaRequested,
             this, &MainWindow::onDeleteMinutiaRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::editMinutiaPropertiesRequested,
+            this, &MainWindow::onEditMinutiaPropertiesRequested);
+    connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteAllMinutiaeRequested,
+            this, &MainWindow::onDeleteAllMinutiaeRequested);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::deleteImageRequested,
             this, &MainWindow::onDeleteImageRequested);
     connect(fragmentManager, &FingerprintEnhancer::FragmentManager::duplicateFragmentRequested,
@@ -1463,13 +1468,47 @@ void MainWindow::openImage() {
 }
 
 void MainWindow::saveImage() {
-    // TODO: Implementar salvamento de imagem
-    statusLabel->setText("Image saved");
+    /**
+     * Salvar imagem processada em arquivo
+     * 
+     * Esta função permitiria salvar a workingImage atual (com realces aplicados)
+     * da entidade selecionada (imagem ou fragmento) em um arquivo.
+     * 
+     * Funcionalidade planejada:
+     * - Abrir diálogo para escolher formato (PNG, JPEG, TIFF, BMP)
+     * - Configurar qualidade/compressão
+     * - Salvar metadados EXIF se aplicável
+     * 
+     * Nota: Use "Exportar Fragmento" para exportar fragmentos com minúcias
+     */
+    QMessageBox::information(this, "Salvar Imagem",
+        "Use 'Exportar Fragmento' no menu de contexto do fragmento\n"
+        "para exportar com minúcias marcadas.");
+    statusLabel->setText("Use 'Exportar Fragmento' para salvar com minúcias");
 }
 
 void MainWindow::exportReport() {
-    // TODO: Implementar exportação de relatório
-    statusLabel->setText("Report exported");
+    /**
+     * Exportar relatório completo do projeto
+     * 
+     * Funcionalidade planejada:
+     * - Gerar relatório PDF ou HTML com:
+     *   * Informações do caso
+     *   * Imagens processadas
+     *   * Fragmentos destacados
+     *   * Minúcias marcadas e contagens
+     *   * Resultados de comparação AFIS
+     * - Template customizável
+     * - Inclusão de logotipo institucional
+     */
+    QMessageBox::information(this, "Exportar Relatório",
+        "Funcionalidade em desenvolvimento.\n\n"
+        "O relatório incluirá:\n"
+        "• Informações do caso\n"
+        "• Imagens processadas\n"
+        "• Minúcias marcadas\n"
+        "• Resultados de comparação");
+    statusLabel->setText("Exportação de relatórios em desenvolvimento");
 }
 
 void MainWindow::exitApplication() {
@@ -1483,8 +1522,27 @@ void MainWindow::resetToOriginal() {
 }
 
 void MainWindow::undoLastOperation() {
-    // TODO: Implementar undo
-    statusLabel->setText("Last operation undone");
+    /**
+     * Desfazer última operação
+     * 
+     * Sistema de undo/redo requer:
+     * - Pilha de comandos executados
+     * - Armazenar estado anterior de cada operação
+     * - Possibilidade de reverter transformações
+     * 
+     * Implementação sugerida:
+     * - Padrão Command para cada operação
+     * - QUndoStack do Qt
+     * - Limite de histórico (ex: 50 operações)
+     * 
+     * Nota: Atualmente use "Resetar Realces" para voltar ao estado original
+     */
+    QMessageBox::information(this, "Desfazer",
+        "Sistema de Undo/Redo em desenvolvimento.\n\n"
+        "Por enquanto, use:\n"
+        "• 'Resetar Realces' para remover processamentos\n"
+        "• 'Resetar Tudo' para voltar ao estado original");
+    statusLabel->setText("Undo/Redo não disponível - use 'Resetar Realces'");
 }
 
 void MainWindow::updateImageDisplay() {
@@ -1705,11 +1763,20 @@ void MainWindow::subtractBackground() {
 }
 
 void MainWindow::applyGaussianBlur() {
-    // TODO: Criar diálogo para escolher sigma
+    /**
+     * Aplicar filtro Gaussiano (suavização)
+     * 
+     * Atualmente usa parâmetros fixos: kernel 5x5, sigma=1.5
+     * 
+     * Melhoria futura: Criar diálogo para ajustar:
+     * - Tamanho do kernel (3x3, 5x5, 7x7, etc.)
+     * - Valor de sigma (desvio padrão)
+     * - Preview em tempo real
+     */
     applyOperationToCurrentEntity([](cv::Mat& img) {
         cv::GaussianBlur(img, img, cv::Size(5, 5), 1.5);
-    });
-    statusLabel->setText("Filtro Gaussiano aplicado");
+    }, FingerprintEnhancer::ProcessingOperationType::GAUSSIAN_BLUR, "kernel=5x5, sigma=1.5");
+    statusLabel->setText("Filtro Gaussiano aplicado (kernel: 5x5, sigma: 1.5)");
 }
 
 void MainWindow::applySharpenFilter() {
@@ -1719,17 +1786,22 @@ void MainWindow::applySharpenFilter() {
             -1, 5, -1,
             0, -1, 0);
         cv::filter2D(img, img, -1, kernel);
-    });
+    }, FingerprintEnhancer::ProcessingOperationType::SHARPEN, "kernel=3x3, strength=default");
     statusLabel->setText("Filtro de nitidez aplicado");
 }
 void MainWindow::adjustBrightnessContrast() {
-    // TODO: Criar diálogo para ajustar parâmetros
+    /**
+     * Ajustar brilho e contraste com valores fixos
+     * 
+     * Nota: Existe também applyBrightnessContrast() que usa sliders interativos
+     * Esta função aplica valores pré-definidos rapidamente
+     */
     applyOperationToCurrentEntity([](cv::Mat& img) {
-        double alpha = 1.2; // contraste
-        double beta = 10;   // brilho
+        double alpha = 1.2; // contraste: 1.0 = sem mudança
+        double beta = 10;   // brilho: 0 = sem mudança
         img.convertTo(img, -1, alpha, beta);
     });
-    statusLabel->setText("Brilho/Contraste ajustados");
+    statusLabel->setText("Brilho/Contraste ajustados (alpha: 1.2, beta: +10)");
 }
 
 void MainWindow::applyBrightnessContrast() {
@@ -1744,7 +1816,8 @@ void MainWindow::applyBrightnessContrast() {
         double beta = static_cast<double>(brightness);
         
         img.convertTo(img, -1, alpha, beta);
-    });
+    }, FingerprintEnhancer::ProcessingOperationType::BRIGHTNESS_CONTRAST, 
+       QString("brilho=%1, contraste=%2%").arg(brightness).arg(contrast));
     
     statusLabel->setText(QString("✅ Brilho: %1 | Contraste: %2% aplicados")
                         .arg(brightness)
@@ -1764,7 +1837,7 @@ void MainWindow::equalizeHistogram() {
             cv::merge(channels, ycrcb);
             cv::cvtColor(ycrcb, img, cv::COLOR_YCrCb2BGR);
         }
-    });
+    }, FingerprintEnhancer::ProcessingOperationType::EQUALIZE_HISTOGRAM, "");
     statusLabel->setText("Histograma equalizado");
 }
 
@@ -1782,14 +1855,14 @@ void MainWindow::applyCLAHE() {
             cv::merge(channels, lab);
             cv::cvtColor(lab, img, cv::COLOR_Lab2BGR);
         }
-    });
+    }, FingerprintEnhancer::ProcessingOperationType::CLAHE, "clipLimit=2.0, tileSize=8x8");
     statusLabel->setText("CLAHE aplicado");
 }
 
 void MainWindow::invertColors() {
     applyOperationToCurrentEntity([](cv::Mat& img) {
         cv::bitwise_not(img, img);
-    });
+    }, FingerprintEnhancer::ProcessingOperationType::INVERT_COLORS, "");
     statusLabel->setText("Cores invertidas");
 }
 
@@ -1803,7 +1876,7 @@ void MainWindow::binarizeImage() {
             cv::cvtColor(img, img, cv::COLOR_BGR2GRAY);
         }
         cv::threshold(img, img, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-    });
+    }, FingerprintEnhancer::ProcessingOperationType::BINARIZE, "method=Otsu");
     statusLabel->setText("Imagem binarizada (Otsu)");
 }
 
@@ -1874,6 +1947,7 @@ void MainWindow::configureMinutiaeDisplay() {
     minutiaeDisplaySettings.labelBackgroundColor = userSettings.getViewLabelBgColor();
     minutiaeDisplaySettings.markerSize = userSettings.getViewMarkerSize();
     minutiaeDisplaySettings.labelFontSize = userSettings.getViewFontSize();
+    minutiaeDisplaySettings.lineWidth = userSettings.getViewLineWidth();
     minutiaeDisplaySettings.labelBackgroundOpacity = userSettings.getViewLabelOpacity() * 255 / 100; // Converter 0-100 para 0-255
     minutiaeDisplaySettings.labelBackgroundColor.setAlpha(minutiaeDisplaySettings.labelBackgroundOpacity);
     minutiaeDisplaySettings.showLabelType = userSettings.getViewShowTypes();
@@ -1947,6 +2021,18 @@ void MainWindow::switchActivePanel() {
 
     // Atualizar entidade corrente para refletir o painel ativo
     updateActivePanelEntity();
+    
+    // Ajustar zoom ao trocar de painel (exceto durante edição de minúcias)
+    if (currentToolMode != MODE_ADD_MINUTIA && 
+        currentToolMode != MODE_EDIT_MINUTIA && 
+        currentToolMode != MODE_REMOVE_MINUTIA) {
+        ImageViewer* activeViewer = getActiveViewer();
+        if (activeViewer && activeViewer->hasImage()) {
+            activeViewer->zoomToFit();
+            fprintf(stderr, "[MAINWINDOW] Auto-ajustando zoom ao chavear painel: %s\n", 
+                    activePanel ? "direito" : "esquerdo");
+        }
+    }
 }
 
 void MainWindow::toggleRightViewer() {
@@ -2108,6 +2194,18 @@ void MainWindow::loadEntityToPanel(const QString& entityId, CurrentEntityType ty
 
         targetOverlay->update();
         targetFragmentOverlay->update();
+        
+        // Ajustar zoom automaticamente (exceto durante edição de minúcias)
+        if (currentToolMode != MODE_ADD_MINUTIA && 
+            currentToolMode != MODE_EDIT_MINUTIA && 
+            currentToolMode != MODE_REMOVE_MINUTIA) {
+            // Usar QTimer para garantir que o viewport tenha o tamanho correto
+            QTimer::singleShot(0, [targetViewer, targetPanel, entityId]() {
+                targetViewer->zoomToFit();
+                fprintf(stderr, "[MAINWINDOW] Auto-ajustando zoom ao carregar entidade no painel %s: %s\n", 
+                        targetPanel ? "direito" : "esquerdo", entityId.toStdString().c_str());
+            });
+        }
     }
 
     // Se enviou para painel ativo, atualizar entidade corrente
@@ -3231,10 +3329,26 @@ void MainWindow::convertToGrayscale() {
 }
 
 void MainWindow::adjustColorLevels() {
-    // TODO: Criar diálogo para ajuste de níveis por canal
+    /**
+     * Ajustar níveis de cor por canal
+     * 
+     * Funcionalidade planejada:
+     * - Ajuste independente para cada canal RGB
+     * - Controle de:
+     *   * Input levels (preto, meio-tom, branco)
+     *   * Output levels (preto, branco)
+     * - Histograma por canal
+     * - Preview em tempo real
+     * 
+     * Similar ao "Levels" do Photoshop/GIMP
+     */
     QMessageBox::information(this, "Ajuste de Níveis",
-        "Funcionalidade em desenvolvimento.\n"
-        "Em breve você poderá ajustar níveis individuais de cada canal de cor.");
+        "Funcionalidade em desenvolvimento.\n\n"
+        "Permitirá ajustar:\n"
+        "• Níveis de entrada (sombras, meios-tons, destaques)\n"
+        "• Níveis de saída\n"
+        "• Por canal RGB individual\n"
+        "• Com preview e histograma");
 }
 
 // ==================== MENU DE CONTEXTO E MINÚCIAS ====================
@@ -3348,8 +3462,11 @@ void MainWindow::addMinutiaAtPosition(const QPoint &imagePos) {
     // Criar minúcia temporária para edição - tipo padrão: OTHER (Não Classificada)
     FingerprintEnhancer::Minutia tempMinutia(imagePos, MinutiaeType::OTHER);
 
+    // Obter fragmento corrente para validação de números
+    FingerprintEnhancer::Fragment* currentFrag = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+
     // Abrir diálogo para escolher tipo e configurar
-    FingerprintEnhancer::MinutiaEditDialog dialog(&tempMinutia, this);
+    FingerprintEnhancer::MinutiaEditDialog dialog(&tempMinutia, currentFrag, this);
 
     if (dialog.exec() == QDialog::Accepted) {
         // Obter valores do diálogo
@@ -3692,6 +3809,17 @@ void MainWindow::onProjectModified() {
 void MainWindow::onImageAdded(const QString& imageId) {
     fragmentManager->updateView();
     statusLabel->setText("Imagem adicionada ao projeto");
+    
+    // Se é a primeira imagem do projeto ou o painel está vazio, carregar automaticamente
+    using PM = FingerprintEnhancer::ProjectManager;
+    if (PM::instance().hasOpenProject()) {
+        ImageViewer* activeViewer = getActiveViewer();
+        if (activeViewer && !activeViewer->hasImage()) {
+            // Painel vazio - carregar a imagem automaticamente
+            setCurrentEntity(imageId, ENTITY_IMAGE);
+            fprintf(stderr, "[MAINWINDOW] Primeira imagem carregada automaticamente no painel\n");
+        }
+    }
 }
 
 void MainWindow::onFragmentCreated(const QString& fragmentId) {
@@ -3711,8 +3839,23 @@ void MainWindow::onFragmentSelected(const QString& fragmentId) {
 }
 
 void MainWindow::onMinutiaAdded(const QString& minutiaId) {
+    /**
+     * Atualizar ambos os painéis quando uma minúcia é adicionada
+     * O mesmo fragmento pode estar exibido nos dois painéis
+     */
+    
+    // Atualizar overlay do painel ativo
     minutiaeOverlay->update();
+    
+    // Atualizar também o outro painel se tiver o mesmo fragmento
+    if (leftMinutiaeOverlay) leftMinutiaeOverlay->update();
+    if (rightMinutiaeOverlay) rightMinutiaeOverlay->update();
+    
+    // Atualizar árvore de projeto
     fragmentManager->updateView();
+    
+    fprintf(stderr, "[MAINWINDOW] Minúcia adicionada - ambos painéis atualizados: %s\n", 
+            minutiaId.toStdString().c_str());
 }
 
 void MainWindow::onMinutiaSelected(const QString& minutiaId) {
@@ -3755,12 +3898,15 @@ void MainWindow::onMinutiaDoubleClicked(const QString& minutiaId) {
     using PM = FingerprintEnhancer::ProjectManager;
 
     FingerprintEnhancer::Minutia* minutia = PM::instance().getCurrentProject()->findMinutia(minutiaId);
+    FingerprintEnhancer::Fragment* parentFrag = PM::instance().getCurrentProject()->findFragmentByMinutiaId(minutiaId);
     if (minutia) {
-        FingerprintEnhancer::MinutiaEditDialog dialog(minutia, this);
+        FingerprintEnhancer::MinutiaEditDialog dialog(minutia, parentFrag, this);
         if (dialog.exec() == QDialog::Accepted) {
             // As mudanças já foram aplicadas ao objeto minutia
             PM::instance().getCurrentProject()->setModified();
-            minutiaeOverlay->update();
+            // Atualizar ambos os overlays
+            if (leftMinutiaeOverlay) leftMinutiaeOverlay->update();
+            if (rightMinutiaeOverlay) rightMinutiaeOverlay->update();
             fragmentManager->updateView();
             statusLabel->setText("Minúcia editada");
         }
@@ -4104,8 +4250,20 @@ void MainWindow::loadCurrentEntityToView() {
         activeFragmentOverlay->update();
     }
     
-    // Aplicar ajuste ao tamanho do painel
-    activeViewer->zoomToFit();
+    // Ajustar zoom ao carregar nova entidade (exceto durante edição de minúcias)
+    // Durante edição de minúcias, manter zoom atual para estabilidade
+    if (currentToolMode != MODE_ADD_MINUTIA && 
+        currentToolMode != MODE_EDIT_MINUTIA && 
+        currentToolMode != MODE_REMOVE_MINUTIA) {
+        // Usar QTimer para garantir que o viewport tenha o tamanho correto
+        QTimer::singleShot(0, [activeViewer, this]() {
+            activeViewer->zoomToFit();
+            fprintf(stderr, "[MAINWINDOW] Auto-ajustando zoom ao carregar entidade: %s\n", 
+                    currentEntityId.toStdString().c_str());
+        });
+    } else {
+        fprintf(stderr, "[MAINWINDOW] Mantendo zoom durante edição de minúcias\n");
+    }
 }
 
 cv::Mat& MainWindow::getCurrentWorkingImage() {
@@ -4148,6 +4306,44 @@ void MainWindow::applyOperationToCurrentEntity(std::function<void(cv::Mat&)> ope
 
     // Marcar projeto como modificado
     using PM = FingerprintEnhancer::ProjectManager;
+    PM::instance().getCurrentProject()->setModified();
+}
+
+void MainWindow::applyOperationToCurrentEntity(std::function<void(cv::Mat&)> operation, 
+                                               FingerprintEnhancer::ProcessingOperationType opType,
+                                               const QString& params) {
+    if (currentEntityType == ENTITY_NONE || currentEntityId.isEmpty()) {
+        QMessageBox::warning(this, "Erro", "Nenhuma imagem ou fragmento selecionado");
+        return;
+    }
+
+    cv::Mat& workingImage = getCurrentWorkingImage();
+    if (workingImage.empty()) {
+        QMessageBox::warning(this, "Erro", "Imagem de trabalho inválida");
+        return;
+    }
+
+    // Aplicar operação
+    operation(workingImage);
+
+    // Registrar no histórico
+    using PM = FingerprintEnhancer::ProjectManager;
+    if (currentEntityType == ENTITY_IMAGE) {
+        FingerprintEnhancer::FingerprintImage* image = PM::instance().getCurrentProject()->findImage(currentEntityId);
+        if (image) {
+            image->processingHistory.append(FingerprintEnhancer::ProcessingOperation(opType, params));
+        }
+    } else if (currentEntityType == ENTITY_FRAGMENT) {
+        FingerprintEnhancer::Fragment* fragment = PM::instance().getCurrentProject()->findFragment(currentEntityId);
+        if (fragment) {
+            fragment->processingHistory.append(FingerprintEnhancer::ProcessingOperation(opType, params));
+        }
+    }
+
+    // Recarregar visualização
+    loadCurrentEntityToView();
+
+    // Marcar projeto como modificado
     PM::instance().getCurrentProject()->setModified();
 }
 
@@ -4519,6 +4715,75 @@ void MainWindow::onDeleteMinutiaRequested(const QString& minutiaId) {
     }
 }
 
+void MainWindow::onDeleteAllMinutiaeRequested(const QString& fragmentId) {
+    using PM = FingerprintEnhancer::ProjectManager;
+    
+    FingerprintEnhancer::Fragment* fragment = PM::instance().getCurrentProject()->findFragment(fragmentId);
+    if (!fragment) {
+        QMessageBox::warning(this, "Erro", "Fragmento não encontrado");
+        return;
+    }
+    
+    int count = fragment->minutiae.size();
+    if (count == 0) {
+        QMessageBox::information(this, "Informação", "Este fragmento não possui minúcias para excluir.");
+        return;
+    }
+    
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this,
+        "Confirmar Exclusão",
+        QString("Deseja realmente excluir TODAS as %1 minúcias deste fragmento?\n\n"
+                "Esta ação não pode ser desfeita!")
+            .arg(count),
+        QMessageBox::Yes | QMessageBox::No
+    );
+    
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+    
+    // Excluir todas as minúcias
+    if (PM::instance().deleteAllMinutiaeFromFragment(fragmentId)) {
+        // Atualizar visualização se este fragmento está corrente
+        if (currentEntityType == ENTITY_FRAGMENT && currentEntityId == fragmentId) {
+            minutiaeOverlay->clearSelection();
+            minutiaeOverlay->update();
+        }
+        
+        // Atualizar view do gerenciador
+        fragmentManager->updateView();
+        
+        statusLabel->setText(QString("%1 minúcias excluídas").arg(count));
+    } else {
+        QMessageBox::warning(this, "Erro", "Não foi possível excluir as minúcias");
+    }
+}
+
+void MainWindow::onEditMinutiaPropertiesRequested(const QString& minutiaId) {
+    using PM = FingerprintEnhancer::ProjectManager;
+    
+    FingerprintEnhancer::Minutia* minutia = PM::instance().getCurrentProject()->findMinutia(minutiaId);
+    FingerprintEnhancer::Fragment* parentFrag = PM::instance().getCurrentProject()->findFragmentByMinutiaId(minutiaId);
+    if (!minutia) {
+        QMessageBox::warning(this, "Erro", "Minúcia não encontrada");
+        return;
+    }
+    
+    // Usar MinutiaEditDialog para editar propriedades
+    FingerprintEnhancer::MinutiaEditDialog dialog(minutia, parentFrag, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        // Atualizar visualizações
+        fragmentManager->updateView();
+        // Atualizar ambos os overlays
+        if (leftMinutiaeOverlay) leftMinutiaeOverlay->update();
+        if (rightMinutiaeOverlay) rightMinutiaeOverlay->update();
+        
+        // Marcar projeto como modificado
+        PM::instance().getCurrentProject()->setModified();
+    }
+}
+
 void MainWindow::onDeleteImageRequested(const QString& imageId) {
     using PM = FingerprintEnhancer::ProjectManager;
 
@@ -4623,8 +4888,19 @@ void MainWindow::onDuplicateFragmentRequested(const QString& fragmentId) {
     newFragment.sourceRect = originalFrag->sourceRect;
     newFragment.originalImage = originalFrag->originalImage.clone();
     newFragment.workingImage = originalFrag->workingImage.clone();
+    newFragment.notes = originalFrag->notes;
     newFragment.createdAt = QDateTime::currentDateTime();
     newFragment.modifiedAt = QDateTime::currentDateTime();
+    
+    // Auto-numerar o novo fragmento (incrementa automaticamente)
+    newFragment.displayNumber = PM::instance().getNextFragmentNumber(originalFrag->parentImageId);
+    newFragment.displayName = originalFrag->displayName;  // Manter mesmo nome, sem "(cópia)"
+    
+    // Copiar transformações geométricas
+    newFragment.currentRotationAngle = originalFrag->currentRotationAngle;
+    newFragment.currentFlippedHorizontal = originalFrag->currentFlippedHorizontal;
+    newFragment.currentFlippedVertical = originalFrag->currentFlippedVertical;
+    newFragment.geometricTransforms = originalFrag->geometricTransforms;
     
     // Copiar minúcias
     for (const auto& minutia : originalFrag->minutiae) {
@@ -4632,6 +4908,7 @@ void MainWindow::onDuplicateFragmentRequested(const QString& fragmentId) {
         newMinutia.id = QUuid::createUuid().toString();
         newMinutia.createdAt = QDateTime::currentDateTime();
         newMinutia.modifiedAt = QDateTime::currentDateTime();
+        // Manter o mesmo displayNumber relativo (será renumerado se necessário)
         newFragment.minutiae.push_back(newMinutia);
     }
 
@@ -4639,6 +4916,11 @@ void MainWindow::onDuplicateFragmentRequested(const QString& fragmentId) {
     parentImg->fragments.append(newFragment);
     parentImg->modifiedAt = QDateTime::currentDateTime();
     PM::instance().getCurrentProject()->setModified();
+    
+    fprintf(stderr, "[MAINWINDOW] Fragmento duplicado: %s → %s (número %02d)\n",
+            originalFrag->id.toStdString().c_str(),
+            newFragment.id.toStdString().c_str(),
+            newFragment.displayNumber);
 
     // Atualizar view
     fragmentManager->updateView();
@@ -4716,9 +4998,22 @@ void MainWindow::onExportFragmentRequested(const QString& fragmentId) {
         return;
     }
     
+    // Sugerir nome do arquivo: displayName + número formatado
+    QString fragNumber = PM::instance().getFragmentDisplayNumber(fragmentId);
+    QString suggestedName = frag->displayName;
+    if (suggestedName.isEmpty()) {
+        suggestedName = QString("Fragmento_%1").arg(fragNumber);
+    } else {
+        // Remover caracteres especiais do nome
+        QRegularExpression regex("[^a-zA-Z0-9_-]");
+        suggestedName = suggestedName.replace(regex, "_");
+        suggestedName = QString("%1_%2").arg(suggestedName).arg(fragNumber);
+    }
+    
     // Abrir diálogo de exportação
     QString projectDir = getProjectDirectory();
     FragmentExportDialog dialog(frag, 1.0, this, projectDir);
+    dialog.setSuggestedFileName(suggestedName);
     if (dialog.exec() == QDialog::Accepted) {
         QString errorMessage;
         if (dialog.exportImage(errorMessage)) {
@@ -4743,6 +5038,23 @@ void MainWindow::onEditImagePropertiesRequested(const QString& imageId) {
     
     FingerprintEnhancer::ImagePropertiesDialog dialog(img, this);
     if (dialog.exec() == QDialog::Accepted) {
+        // Atualizar número de identificação
+        int oldNumber = img->displayNumber;
+        int newNumber = dialog.getDisplayNumber();
+        
+        if (newNumber != oldNumber) {
+            // Atualizar número da imagem
+            img->displayNumber = newNumber;
+            
+            // Atualizar números de todos os fragmentos desta imagem
+            // (pois herdam o número da imagem)
+            fprintf(stderr, "[MAINWINDOW] Número da imagem alterado de %02d para %02d\n",
+                    oldNumber, newNumber);
+        }
+        
+        // Atualizar nome
+        img->displayName = dialog.getDisplayName();
+        
         // Atualizar comentários
         img->notes = dialog.getComments();
         img->modifiedAt = QDateTime::currentDateTime();
@@ -4766,12 +5078,25 @@ void MainWindow::onEditFragmentPropertiesRequested(const QString& fragmentId) {
     
     FingerprintEnhancer::FragmentPropertiesDialog dialog(frag, this);
     if (dialog.exec() == QDialog::Accepted) {
+        // Atualizar número de identificação
+        int oldNumber = frag->displayNumber;
+        int newNumber = dialog.getDisplayNumber();
+        
+        if (newNumber != oldNumber) {
+            frag->displayNumber = newNumber;
+            fprintf(stderr, "[MAINWINDOW] Número do fragmento alterado de %02d para %02d\n",
+                    oldNumber, newNumber);
+        }
+        
+        // Atualizar nome
+        frag->displayName = dialog.getDisplayName();
+        
         // Atualizar comentários
         frag->notes = dialog.getComments();
         frag->modifiedAt = QDateTime::currentDateTime();
         PM::instance().getCurrentProject()->setModified();
         
-        // Atualizar visualização da árvore
+        // Atualizar visualização da árvore (mostra os novos números/nomes)
         fragmentManager->updateView();
         
         statusLabel->setText("Propriedades do fragmento atualizadas");

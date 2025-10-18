@@ -5,6 +5,7 @@
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QLabel>
+#include <QSpinBox>
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -24,6 +25,8 @@ public:
 
     QString getComments() const { return commentsEdit->toPlainText(); }
     double getPixelsPerMM() const;
+    int getDisplayNumber() const;
+    QString getDisplayName() const;
 
 private:
     void setupUI();
@@ -31,18 +34,25 @@ private:
     void saveData();
     void updateDpiFromScale();
     void updateScaleFromDpi();
+    void validateNumber();
 
     Fragment* fragment;
     
     // Widgets informativos (read-only)
     QLabel *fragmentIdLabel;
+    QLabel *parentImageLabel;
     QLabel *sourceRectLabel;
     QLabel *imageSizeLabel;
     QLabel *minutiaeCountLabel;
     QLabel *createdAtLabel;
     QLabel *modifiedAtLabel;
+    QLabel *uuidLabel;
+    QLabel *rotationLabel;
+    QLabel *transformsLabel;
     
     // Widgets editáveis
+    QSpinBox *numberSpinBox;         // Número do fragmento (apenas segunda parte)
+    QLineEdit *nameEdit;
     QTextEdit *commentsEdit;
     QDoubleSpinBox *scaleSpinBox;  // Escala em pixels/mm
     QDoubleSpinBox *dpiSpinBox;    // Escala em DPI

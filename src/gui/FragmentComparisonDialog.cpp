@@ -332,7 +332,7 @@ void FragmentComparisonDialog::loadFragmentsList() {
     fprintf(stderr, "[COMPARISON] Total de fragmentos: %d, com escala: %d\n",
             totalFragments, fragmentsWithScale);
     fprintf(stderr, "[COMPARISON] Vetor availableFragments.size() = %d\n",
-            availableFragments.size());
+            static_cast<int>(availableFragments.size()));
     
     // Desabilitar botão de comparação se não houver fragmentos suficientes
     bool hasFragments = fragment1Combo->count() >= 2;
@@ -508,7 +508,7 @@ void FragmentComparisonDialog::displayFragment(FingerprintEnhancer::Fragment* fr
     }
     
     fprintf(stderr, "[DISPLAY] Exibindo fragmento %s com %d minúcias\n",
-            fragment->id.toStdString().c_str(), fragment->minutiae.size());
+            fragment->id.toStdString().c_str(), static_cast<int>(fragment->minutiae.size()));
     
     // Exibir imagem do fragmento
     viewer->setImage(fragment->workingImage);
@@ -562,7 +562,7 @@ void FragmentComparisonDialog::onCompareClicked() {
     
     fprintf(stderr, "\n[COMPARISON] ========== BOTÃO COMPARAR CLICADO ==========\n");
     fprintf(stderr, "[COMPARISON] idx1=%d, idx2=%d, availableFragments.size()=%d\n",
-            idx1, idx2, availableFragments.size());
+            idx1, idx2, static_cast<int>(availableFragments.size()));
     
     if (idx1 < 0 || idx2 < 0 || idx1 == idx2) {
         QMessageBox::warning(this, "Erro", "Selecione dois fragmentos diferentes.");
@@ -572,7 +572,7 @@ void FragmentComparisonDialog::onCompareClicked() {
     // Validação crítica de índices antes de acessar availableFragments
     if (idx1 >= availableFragments.size() || idx2 >= availableFragments.size()) {
         fprintf(stderr, "[COMPARISON] ERRO CRÍTICO: Índices fora do range! idx1=%d, idx2=%d, size=%d\n",
-                idx1, idx2, availableFragments.size());
+                idx1, idx2, static_cast<int>(availableFragments.size()));
         QMessageBox::critical(this, "Erro Interno",
             QString("Erro ao acessar fragmentos (índices: %1, %2, tamanho: %3).\n"
                     "Tente reabrir a janela de comparação.")
@@ -629,9 +629,9 @@ void FragmentComparisonDialog::onCompareClicked() {
     
     fprintf(stderr, "\n[COMPARISON] ========== INICIANDO COMPARAÇÃO ==========\n");
     fprintf(stderr, "[COMPARISON] Fragmento 1: %s (%d minúcias, escala=%.2f px/mm)\n", 
-            frag1->id.toStdString().c_str(), frag1->minutiae.size(), frag1->pixelsPerMM);
+            frag1->id.toStdString().c_str(), static_cast<int>(frag1->minutiae.size()), frag1->pixelsPerMM);
     fprintf(stderr, "[COMPARISON] Fragmento 2: %s (%d minúcias, escala=%.2f px/mm)\n", 
-            frag2->id.toStdString().c_str(), frag2->minutiae.size(), frag2->pixelsPerMM);
+            frag2->id.toStdString().c_str(), static_cast<int>(frag2->minutiae.size()), frag2->pixelsPerMM);
     fprintf(stderr, "[COMPARISON] Configurações:\n");
     fprintf(stderr, "[COMPARISON]   - Tolerância posição: %.1f mm (%.1f pixels, escala média=%.2f px/mm)\n", 
             toleranceMM, tolerancePixels, avgScale);

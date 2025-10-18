@@ -1,4 +1,5 @@
 #include "FragmentManager.h"
+#include "../core/ProjectManager.h"
 #include <QHeaderView>
 #include <QMessageBox>
 #include <QFileInfo>
@@ -185,10 +186,17 @@ void FragmentManager::buildHierarchyTree() {
 QTreeWidgetItem* FragmentManager::createImageItem(const FingerprintImage& image) {
     QTreeWidgetItem* item = new QTreeWidgetItem();
 
-    QFileInfo fileInfo(image.originalFilePath);
-    QString fileName = fileInfo.fileName();
+    // Número formatado: "01", "02", etc.
+    QString imgNumber = QString("%1").arg(image.displayNumber, 2, 10, QChar('0'));
+    
+    // Nome: usar displayName se disponível, senão nome do arquivo
+    QString displayName = image.displayName;
+    if (displayName.isEmpty()) {
+        QFileInfo fileInfo(image.originalFilePath);
+        displayName = fileInfo.completeBaseName();
+    }
 
-    item->setText(0, QString("📷 %1").arg(fileName));
+    item->setText(0, QString("📷 %1: %2").arg(imgNumber).arg(displayName));
     item->setText(1, QString("%1 fragmentos | %2 minúcias")
         .arg(image.getFragmentCount())
         .arg(image.getTotalMinutiaeCount()));
@@ -206,7 +214,16 @@ QTreeWidgetItem* FragmentManager::createImageItem(const FingerprintImage& image)
 QTreeWidgetItem* FragmentManager::createFragmentItem(const Fragment& fragment, int index) {
     QTreeWidgetItem* item = new QTreeWidgetItem();
 
-    item->setText(0, QString("🔍 Fragmento #%1").arg(index));
+    // Obter número completo formatado: "02-01"
+    QString fragNumber = ProjectManager::instance().getFragmentDisplayNumber(fragment.id);
+    
+    // Nome: usar displayName se disponível, senão padrão
+    QString displayName = fragment.displayName;
+    if (displayName.isEmpty()) {
+        displayName = QString("Fragmento %1").arg(fragment.displayNumber);
+    }
+
+    item->setText(0, QString("🔍 %1: %2").arg(fragNumber).arg(displayName));
     item->setText(1, QString("%1×%2 | %3 minúcias")
         .arg(fragment.sourceRect.width())
         .arg(fragment.sourceRect.height())
@@ -222,12 +239,22 @@ QTreeWidgetItem* FragmentManager::createFragmentItem(const Fragment& fragment, i
 QTreeWidgetItem* FragmentManager::createMinutiaItem(const Minutia& minutia, int index) {
     QTreeWidgetItem* item = new QTreeWidgetItem();
 
+    // Obter número completo formatado: "02-01-03"
+    QString minNumber = ProjectManager::instance().getMinutiaDisplayNumber(minutia.id);
+    
+    // Nome: usar displayName se disponível
+    QString displayName = minutia.displayName;
+    if (displayName.isEmpty()) {
+        displayName = QString("M%1").arg(minutia.displayNumber);
+    }
+    
+    // Tipo da minúcia
     QString typeName = minutia.getTypeName();
     if (typeName.length() > 30) {
         typeName = minutia.getTypeAbbreviation();
     }
 
-    item->setText(0, QString("📍 Minúcia #%1").arg(index));
+    item->setText(0, QString("📍 %1: %2").arg(minNumber).arg(displayName));
     item->setText(1, QString("(%1, %2) | %3")
         .arg(minutia.position.x())
         .arg(minutia.position.y())
@@ -505,16 +532,21 @@ void FragmentManager::onTreeContextMenu(const QPoint& pos) {
                 emit deleteImageRequested(entityId);
             });
         } else if (itemType == "FRAGMENT") {
+            menu.addSeparator();
+            menu.addAction("🗑️ Excluir Todas as Minúcias", [this, entityId]() {
+                emit deleteAllMinutiaeRequested(entityId);
+            });
+            menu.addSeparator();
             menu.addAction("🗑 Excluir Fragmento", [this, entityId]() {
                 emit deleteFragmentRequested(entityId);
             });
         }
     } else if (itemType == "MINUTIA") {
-        menu.addAction("ℹ Informações", this, &FragmentManager::onShowMinutiaInfo);
-        menu.addAction("✏️ Editar Minúcia", [this, entityId]() {
-            emit editMinutiaRequested(entityId);
+        // Menu simplificado: apenas Propriedades e Apagar
+        menu.addAction("📝 Propriedades", [this, entityId]() {
+            emit editMinutiaPropertiesRequested(entityId);
         });
-        menu.addAction("🗑 Excluir Minúcia", [this, entityId]() {
+        menu.addAction("🗑 Apagar", [this, entityId]() {
             emit deleteMinutiaRequested(entityId);
         });
     }

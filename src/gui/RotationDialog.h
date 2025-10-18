@@ -66,6 +66,7 @@ private:
     QDoubleSpinBox *angleSpinBox;
     QCheckBox *transparentBgCheckbox;
     QLabel *previewLabel;
+    QLabel *currentAngleLabel;  // Exibe ângulo atual do objeto
     QPushButton *acceptButton;
     QPushButton *cancelButton;
 

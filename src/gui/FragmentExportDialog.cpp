@@ -980,3 +980,30 @@ void FragmentExportDialog::saveCurrentSettings()
     // Gravar no disco
     settings.save();
 }
+
+void FragmentExportDialog::setSuggestedFileName(const QString& name) {
+    // Sugerir nome de arquivo com caminho completo
+    QString currentPath = filePathEdit->text();
+    QFileInfo fileInfo(currentPath);
+    
+    // Se já tem um diretório, manter, senão usar padrão
+    QString directory = fileInfo.absolutePath();
+    if (directory == "." || directory.isEmpty()) {
+        directory = defaultExportDirectory;
+    }
+    
+    // Obter extensão do formato selecionado
+    QString extension = ".png";  // padrão
+    QString format = getFormat();
+    if (format.contains("jpg", Qt::CaseInsensitive)) {
+        extension = ".jpg";
+    } else if (format.contains("tif", Qt::CaseInsensitive)) {
+        extension = ".tif";
+    } else if (format.contains("bmp", Qt::CaseInsensitive)) {
+        extension = ".bmp";
+    }
+    
+    // Montar caminho completo
+    QString suggestedPath = QDir(directory).filePath(name + extension);
+    filePathEdit->setText(suggestedPath);
+}

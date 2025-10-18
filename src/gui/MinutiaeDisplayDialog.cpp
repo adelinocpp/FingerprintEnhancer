@@ -1,5 +1,6 @@
 #include "MinutiaeDisplayDialog.h"
 #include "../core/UserSettings.h"
+#include "../core/ProjectManager.h"
 #include <QGridLayout>
 #include <QSlider>
 #include <QPainter>
@@ -58,6 +59,13 @@ void MinutiaeDisplayDialog::setupUI() {
     labelFontSizeSpinBox->setValue(settings.labelFontSize);
     labelFontSizeSpinBox->setSuffix(" pt");
     sizeLayout->addRow("Tamanho da Fonte:", labelFontSizeSpinBox);
+
+    lineWidthSpinBox = new QSpinBox();
+    lineWidthSpinBox->setRange(1, 10);
+    lineWidthSpinBox->setValue(settings.lineWidth);
+    lineWidthSpinBox->setSuffix(" px");
+    lineWidthSpinBox->setToolTip("Largura da linha das marcações");
+    sizeLayout->addRow("Largura da Linha:", lineWidthSpinBox);
 
     labelPositionCombo = new QComboBox();
     labelPositionCombo->addItem("À Direita (Padrão)", static_cast<int>(FingerprintEnhancer::MinutiaLabelPosition::RIGHT));
@@ -139,6 +147,7 @@ void MinutiaeDisplayDialog::setupUI() {
     connect(symbolCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MinutiaeDisplayDialog::onSymbolChanged);
     connect(markerSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onMarkerSizeChanged);
     connect(labelFontSizeSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onLabelFontSizeChanged);
+    connect(lineWidthSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &MinutiaeDisplayDialog::onLineWidthChanged);
     connect(labelPositionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &MinutiaeDisplayDialog::onLabelPositionChanged);
     connect(markerColorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseMarkerColor);
     connect(textColorButton, &QPushButton::clicked, this, &MinutiaeDisplayDialog::onChooseTextColor);
@@ -170,6 +179,11 @@ void MinutiaeDisplayDialog::onMarkerSizeChanged(int value) {
 
 void MinutiaeDisplayDialog::onLabelFontSizeChanged(int value) {
     settings.labelFontSize = value;
+    updatePreview();
+}
+
+void MinutiaeDisplayDialog::onLineWidthChanged(int value) {
+    settings.lineWidth = value;
     updatePreview();
 }
 
@@ -229,8 +243,42 @@ void MinutiaeDisplayDialog::onRejected() {
 void MinutiaeDisplayDialog::onApplyClicked() {
     // Salvar sem fechar o diálogo
     saveToGlobalSettings();
-    QMessageBox::information(this, "Configurações Aplicadas", 
-                            "As configurações foram salvas como padrão global.");
+    
+    // Aplicar configurações a TODAS as minúcias do projeto
+    using PM = FingerprintEnhancer::ProjectManager;
+    if (PM::instance().hasOpenProject()) {
+        FingerprintEnhancer::Project* project = PM::instance().getCurrentProject();
+        if (project) {
+            int totalMinutiae = 0;
+            
+            // Percorrer todas as imagens
+            for (auto& img : project->images) {
+                // Percorrer todos os fragmentos da imagem
+                for (auto& frag : img.fragments) {
+                    // Percorrer todas as minúcias do fragmento
+                    for (auto& minutia : frag.minutiae) {
+                        // Aplicar posição do rótulo (só se não foi customizado individualmente)
+                        // Como não temos flag de "customizado", vamos aplicar a todos
+                        // NOTA: Isso pode sobrescrever customizações individuais
+                        // Se quiser preservar customizações, adicione uma flag no Minutia
+                        minutia.labelPosition = settings.defaultLabelPosition;
+                        totalMinutiae++;
+                    }
+                }
+            }
+            
+            project->setModified();
+            
+            fprintf(stderr, "[MINUTIAE_DISPLAY] Configurações aplicadas a %d minúcia(s)\n", totalMinutiae);
+            
+            QMessageBox::information(this, "Configurações Aplicadas", 
+                QString("As configurações foram salvas como padrão global e aplicadas a %1 minúcia(s) do projeto.")
+                    .arg(totalMinutiae));
+        }
+    } else {
+        QMessageBox::information(this, "Configurações Aplicadas", 
+                                "As configurações foram salvas como padrão global.");
+    }
 }
 
 void MinutiaeDisplayDialog::saveToGlobalSettings() {
@@ -248,6 +296,7 @@ void MinutiaeDisplayDialog::saveToGlobalSettings() {
     userSettings.setViewShowAngles(settings.showAngles);
     userSettings.setViewLabelPosition(static_cast<int>(settings.defaultLabelPosition));
     userSettings.setViewSymbol(static_cast<int>(settings.symbol));
+    userSettings.setViewLineWidth(settings.lineWidth);
     
     // Gravar no arquivo .ini
     userSettings.save();
@@ -257,8 +306,8 @@ void MinutiaeDisplayDialog::saveToGlobalSettings() {
             settings.markerColor.red(), settings.markerColor.green(), settings.markerColor.blue());
     fprintf(stderr, "  - Texto: rgb(%d,%d,%d)\n",
             settings.textColor.red(), settings.textColor.green(), settings.textColor.blue());
-    fprintf(stderr, "  - Tamanho: %d px, Fonte: %d pt\n",
-            settings.markerSize, settings.labelFontSize);
+    fprintf(stderr, "  - Tamanho: %d px, Fonte: %d pt, Linha: %d px\n",
+            settings.markerSize, settings.labelFontSize, settings.lineWidth);
 }
 
 void MinutiaeDisplayDialog::onShowLabelTypeChanged(int state) {
@@ -312,8 +361,8 @@ void MinutiaeDisplayDialog::updatePreview() {
     int size = settings.markerSize;
     double angle = 45.0; // Ângulo de exemplo
 
-    // Desenhar símbolo com cor da marcação
-    painter.setPen(QPen(settings.markerColor, 2));
+    // Desenhar símbolo com cor da marcação e largura configurada
+    painter.setPen(QPen(settings.markerColor, settings.lineWidth));
     painter.setBrush(Qt::NoBrush);
 
     switch (settings.symbol) {
@@ -400,11 +449,12 @@ void MinutiaeDisplayDialog::updatePreview() {
         
         int margin = 5;
         
-        // Calcular altura do tipo se for exibido
+        // Calcular altura do tipo se for exibido (reservado para uso futuro)
         int typeHeight = 0;
         if (settings.showLabelType) {
             typeHeight = typeRect.height() + 2; // +2 para espaçamento entre número e tipo
         }
+        (void)typeHeight; // Suprimir warning - reservado para ajustes futuros de posicionamento
         
         QPoint numberPos, typePos;
         
@@ -478,10 +528,11 @@ void MinutiaeDisplayDialog::updatePreview() {
     
     painter.setPen(Qt::darkGray);
     painter.drawText(QRect(220, 20, 220, 140), Qt::AlignLeft | Qt::TextWordWrap,
-                     QString("Símbolo: %1\n\nTamanho: %2 px\nFonte: %3 pt\nOpacidade: %4%\nPosição: %5")
+                     QString("Símbolo: %1\n\nTamanho: %2 px\nFonte: %3 pt\nLargura linha: %4 px\nOpacidade: %5%\nPosição: %6")
                      .arg(settings.getSymbolName())
                      .arg(settings.markerSize)
                      .arg(settings.labelFontSize)
+                     .arg(settings.lineWidth)
                      .arg(int(settings.labelBackgroundOpacity * 100.0 / 255.0))
                      .arg(positionName));
 

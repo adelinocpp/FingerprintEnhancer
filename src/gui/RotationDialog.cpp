@@ -42,6 +42,19 @@ RotationDialog::RotationDialog(const cv::Mat &image, ImageViewer *viewer,
     // Grupo de controles
     QGroupBox *controlGroup = new QGroupBox("Ângulo de Rotação");
     QVBoxLayout *controlLayout = new QVBoxLayout(controlGroup);
+    
+    // Exibir ângulo atual do objeto
+    double currentAngle = 0.0;
+    if (currentFragment) {
+        currentAngle = currentFragment->currentRotationAngle;
+    } else if (parentImage) {
+        currentAngle = parentImage->currentRotationAngle;
+    }
+    
+    currentAngleLabel = new QLabel(QString("Ângulo Atual: %1° | Ajuste: 0.0° | Resultado: %1°").arg(currentAngle, 0, 'f', 1));
+    currentAngleLabel->setStyleSheet("QLabel { font-weight: bold; padding: 5px; }");
+    currentAngleLabel->setAlignment(Qt::AlignCenter);
+    controlLayout->addWidget(currentAngleLabel);
 
     // Slider (-180 a +180 graus)
     QHBoxLayout *sliderLayout = new QHBoxLayout();
@@ -129,6 +142,21 @@ void RotationDialog::onTransparentBgChanged(int state) {
 void RotationDialog::updatePreview(double angle) {
     finalAngle = angle;
     
+    // Atualizar label com ângulo atual + ajuste + resultado
+    double currentAngle = 0.0;
+    if (currentFragment) {
+        currentAngle = currentFragment->currentRotationAngle;
+    } else if (parentImage) {
+        currentAngle = parentImage->currentRotationAngle;
+    }
+    double resultAngle = fmod(currentAngle + angle, 360.0);
+    if (resultAngle < 0) resultAngle += 360.0;
+    
+    currentAngleLabel->setText(QString("Ângulo Atual: %1° | Ajuste: %2° | Resultado: %3°")
+        .arg(currentAngle, 0, 'f', 1)
+        .arg(angle, 0, 'f', 1)
+        .arg(resultAngle, 0, 'f', 1));
+    
     // VERIFICAR: Se rotacionando IMAGEM e o ângulo acumulado é ~0°, usar imagem original
     if (parentImage) {
         double accumulatedAngle = fmod(parentImage->currentRotationAngle + angle, 360.0);
@@ -188,80 +216,67 @@ void RotationDialog::updatePreview(double angle) {
 cv::Mat RotationDialog::rotateImage(const cv::Mat &image, double angle) {
     if (image.empty()) return image;
 
-    // ============================================================================================
-    // TODO: calcular posições dos fragmentos - ROTAÇÃO DA IMAGEM (REFERÊNCIA)
-    // ============================================================================================
-    // Esta é a função que REALMENTE rotaciona a imagem usando OpenCV.
-    // O overlay de fragmentos (FragmentRegionsOverlay::calculateRotatedPolygon) tenta replicar
-    // EXATAMENTE esta transformação para calcular onde os retângulos aparecem.
-    //
-    // ENTRADA:
-    // - image : cv::Mat da imagem a rotacionar (originalImage da entidade)
-    // - angle : Ângulo em graus (delta, não acumulado)
-    //
-    // SAÍDA:
-    // - cv::Mat rotacionado (pode ter tamanho maior com borda branca para ângulos arbitrários)
-    //
-    // MATRIZ DE ROTAÇÃO USADA:
-    // - cv::getRotationMatrix2D(center, -angle, 1.0)
-    // - Ajuste de offset: rotMatrix.at<double>(0,2) += (new_w/2.0) - center.x
-    //                     rotMatrix.at<double>(1,2) += (new_h/2.0) - center.y
-    // - Aplicada com: cv::warpAffine(image, rotated, rotMatrix, cv::Size(new_w, new_h))
-    // ============================================================================================
-
-    // Se o ângulo é ~0°, retornar imagem original sem borda branca
+    // Normalizar ângulo para range [0, 360)
     double normalizedAngle = fmod(angle, 360.0);
     if (normalizedAngle < 0) normalizedAngle += 360.0;
     
-    if (fabs(normalizedAngle) < 0.1 || fabs(normalizedAngle - 360.0) < 0.1) {
-        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~0°) - retornando imagem ORIGINAL (sem borda)\n", angle);
+    // Arredondar para inteiro para verificar múltiplos exatos de 90
+    int roundedAngle = static_cast<int>(std::round(normalizedAngle));
+    roundedAngle = roundedAngle % 360;
+    
+    fprintf(stderr, "[ROTATION] rotateImage: angle=%.2f°, normalized=%.2f°, rounded=%d°\n", 
+            angle, normalizedAngle, roundedAngle);
+    
+    // Para ângulos múltiplos de 90°, usar cv::rotate() (sem bordas brancas)
+    if (roundedAngle == 0) {
+        fprintf(stderr, "[ROTATION] Ângulo ~0° detectado - retornando imagem original\n");
         return image.clone();
-    }
-    
-    // Para múltiplos exatos de 90°, usar rotate() em vez de warpAffine (sem borda branca)
-    bool isMultipleOf90 = false;
-    int rotateCode = -1;
-    
-    if (fabs(normalizedAngle - 90.0) < 0.1) {
-        isMultipleOf90 = true;
-        rotateCode = cv::ROTATE_90_COUNTERCLOCKWISE;
-        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~90°) - usando cv::rotate (sem borda)\n", angle);
-    } else if (fabs(normalizedAngle - 180.0) < 0.1) {
-        isMultipleOf90 = true;
-        rotateCode = cv::ROTATE_180;
-        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~180°) - usando cv::rotate (sem borda)\n", angle);
-    } else if (fabs(normalizedAngle - 270.0) < 0.1) {
-        isMultipleOf90 = true;
-        rotateCode = cv::ROTATE_90_CLOCKWISE;
-        fprintf(stderr, "[ROTATION] rotateImage: %.1f graus (~270°) - usando cv::rotate (sem borda)\n", angle);
-    }
-    
-    if (isMultipleOf90) {
+    } else if (roundedAngle == 90) {
         cv::Mat rotated;
-        cv::rotate(image, rotated, rotateCode);
-        fprintf(stderr, "[ROTATION] Imagem rotacionada: canais=%d, tamanho=%dx%d\n",
-                rotated.channels(), rotated.cols, rotated.rows);
+        cv::rotate(image, rotated, cv::ROTATE_90_COUNTERCLOCKWISE);
+        fprintf(stderr, "[ROTATION] Ângulo 90° detectado - usando cv::rotate (sem borda)\n");
+        return rotated;
+    } else if (roundedAngle == 180) {
+        cv::Mat rotated;
+        cv::rotate(image, rotated, cv::ROTATE_180);
+        fprintf(stderr, "[ROTATION] Ângulo 180° detectado - usando cv::rotate (sem borda)\n");
+        return rotated;
+    } else if (roundedAngle == 270) {
+        cv::Mat rotated;
+        cv::rotate(image, rotated, cv::ROTATE_90_CLOCKWISE);
+        fprintf(stderr, "[ROTATION] Ângulo 270° detectado - usando cv::rotate (sem borda)\n");
         return rotated;
     }
 
-    // Converter ângulo para radianos (OpenCV usa sentido anti-horário, então invertemos)
-    cv::Point2f center(image.cols / 2.0f, image.rows / 2.0f);
+    // Ângulo arbitrário - usar warpAffine
+    // Calcular tamanho exato necessário usando senos e cossenos
+    double angleRad = angle * M_PI / 180.0;
+    double absCos = std::abs(std::cos(angleRad));
+    double absSin = std::abs(std::sin(angleRad));
+    
+    int originalW = image.cols;
+    int originalH = image.rows;
+    
+    // Calcular novo tamanho necessário para conter toda a imagem rotacionada
+    int new_w = static_cast<int>(std::ceil(originalW * absCos + originalH * absSin));
+    int new_h = static_cast<int>(std::ceil(originalW * absSin + originalH * absCos));
+    
+    fprintf(stderr, "[ROTATION] Ângulo arbitrário %.2f°\n", angle);
+    fprintf(stderr, "[ROTATION] Original: %dx%d, Novo: %dx%d\n", originalW, originalH, new_w, new_h);
+    fprintf(stderr, "[ROTATION] cos=%.4f, sin=%.4f\n", absCos, absSin);
+    
+    // Criar matriz de rotação em torno do centro
+    cv::Point2f center(originalW / 2.0f, originalH / 2.0f);
     cv::Mat rotMatrix = cv::getRotationMatrix2D(center, -angle, 1.0);
 
-    // Calcular novo tamanho da imagem para não cortar
-    double abs_cos = abs(rotMatrix.at<double>(0, 0));
-    double abs_sin = abs(rotMatrix.at<double>(0, 1));
-    int new_w = int(image.rows * abs_sin + image.cols * abs_cos);
-    int new_h = int(image.rows * abs_cos + image.cols * abs_sin);
-
-    // Ajustar matriz de rotação para o novo tamanho
+    // Ajustar translação para centralizar na nova imagem
     rotMatrix.at<double>(0, 2) += (new_w / 2.0) - center.x;
     rotMatrix.at<double>(1, 2) += (new_h / 2.0) - center.y;
 
     cv::Mat rotated;
     
-    fprintf(stderr, "[ROTATION] rotateImage: %.1f graus, canais=%d, transparente=%s\n", 
-            angle, image.channels(), useTransparentBackground ? "SIM" : "NAO");
+    fprintf(stderr, "[ROTATION] Canais=%d, transparente=%s\n", 
+            image.channels(), useTransparentBackground ? "SIM" : "NAO");
 
     if (useTransparentBackground) {
         // Converter para BGRA se necessário

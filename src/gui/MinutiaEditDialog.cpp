@@ -3,8 +3,8 @@
 
 namespace FingerprintEnhancer {
 
-MinutiaEditDialog::MinutiaEditDialog(Minutia* minutia, QWidget *parent)
-    : QDialog(parent), currentMinutia(minutia)
+MinutiaEditDialog::MinutiaEditDialog(Minutia* minutia, Fragment* parentFragment, QWidget *parent)
+    : QDialog(parent), currentMinutia(minutia), parentFragment(parentFragment)
 {
     setWindowTitle("Editar Minúcia");
     setupUI();
@@ -18,6 +18,27 @@ void MinutiaEditDialog::setupUI() {
     infoLabel = new QLabel(this);
     infoLabel->setStyleSheet("QLabel { background-color: #f0f0f0; padding: 8px; border-radius: 4px; }");
     mainLayout->addWidget(infoLabel);
+
+    // Grupo de identificação
+    QGroupBox* identGroup = new QGroupBox("Identificação", this);
+    QFormLayout* identLayout = new QFormLayout(identGroup);
+    
+    // Nome
+    nameEdit = new QLineEdit(this);
+    nameEdit->setPlaceholderText("Nome personalizado da minúcia");
+    identLayout->addRow("Nome:", nameEdit);
+    
+    // Número (índice)
+    QHBoxLayout* numberLayout = new QHBoxLayout();
+    QLabel* numberLabel = new QLabel("Minúcia", this);
+    numberSpinBox = new QSpinBox(this);
+    numberSpinBox->setRange(1, 9999);
+    numberLayout->addWidget(numberLabel);
+    numberLayout->addWidget(numberSpinBox);
+    numberLayout->addStretch();
+    identLayout->addRow("Número:", numberLayout);
+    
+    mainLayout->addWidget(identGroup);
 
     // Grupo de posição
     QGroupBox* positionGroup = new QGroupBox("Posição", this);
@@ -97,7 +118,11 @@ void MinutiaEditDialog::setupUI() {
     mainLayout->addLayout(buttonLayout);
 
     setLayout(mainLayout);
-    resize(400, 500);
+    resize(400, 550);
+    
+    // Conectar validação de número
+    connect(numberSpinBox, QOverload<int>::of(&QSpinBox::valueChanged),
+            this, &MinutiaEditDialog::validateNumber);
 }
 
 void MinutiaEditDialog::populateTypeComboBox() {
@@ -163,6 +188,10 @@ void MinutiaEditDialog::loadMinutiaData() {
         .arg(currentMinutia->modifiedAt.toString("dd/MM/yyyy hh:mm"));
     infoLabel->setText(info);
 
+    // Carregar nome e número
+    nameEdit->setText(currentMinutia->displayName);
+    numberSpinBox->setValue(currentMinutia->displayNumber);
+
     // Carregar dados
     xSpinBox->setValue(currentMinutia->position.x());
     ySpinBox->setValue(currentMinutia->position.y());
@@ -191,6 +220,8 @@ void MinutiaEditDialog::loadMinutiaData() {
 
 void MinutiaEditDialog::onAccept() {
     if (currentMinutia) {
+        currentMinutia->displayName = getDisplayName();
+        currentMinutia->displayNumber = getDisplayNumber();
         currentMinutia->position = getPosition();
         currentMinutia->type = getType();
         currentMinutia->angle = getAngle();
@@ -231,6 +262,49 @@ QString MinutiaEditDialog::getNotes() const {
 MinutiaLabelPosition MinutiaEditDialog::getLabelPosition() const {
     int posValue = labelPositionComboBox->currentData().toInt();
     return static_cast<MinutiaLabelPosition>(posValue);
+}
+
+QString MinutiaEditDialog::getDisplayName() const {
+    return nameEdit->text().trimmed();
+}
+
+int MinutiaEditDialog::getDisplayNumber() const {
+    return numberSpinBox->value();
+}
+
+void MinutiaEditDialog::validateNumber() {
+    if (!currentMinutia || !parentFragment) return;
+    
+    int newNumber = numberSpinBox->value();
+    
+    // Se não mudou, não precisa validar
+    if (newNumber == currentMinutia->displayNumber) {
+        return;
+    }
+    
+    // Reajustar números de outras minúcias se houver conflito
+    for (auto& minutia : parentFragment->minutiae) {
+        if (minutia.id != currentMinutia->id && minutia.displayNumber == newNumber) {
+            // Encontrar próximo número disponível
+            int nextAvailable = 1;
+            bool found = false;
+            while (!found && nextAvailable <= 9999) {
+                found = true;
+                for (const auto& checkMin : parentFragment->minutiae) {
+                    if (checkMin.displayNumber == nextAvailable) {
+                        found = false;
+                        nextAvailable++;
+                        break;
+                    }
+                }
+            }
+            if (nextAvailable <= 9999) {
+                minutia.displayNumber = nextAvailable;
+                fprintf(stderr, "[MINUTIA] Número reajustado: Minúcia %s movida para %d\n",
+                        minutia.id.toStdString().c_str(), nextAvailable);
+            }
+        }
+    }
 }
 
 } // namespace FingerprintEnhancer

@@ -27,8 +27,8 @@ QVector<QPair<int, int>> AFISLikelihoodCalculator::findCorrespondencesWithAlignm
     GeometricTransform& transform) const {
     
     fprintf(stderr, "\n[AFIS-LR] ========== INÍCIO DO MATCHING COM ALINHAMENTO ==========\n");
-    fprintf(stderr, "[AFIS-LR] Minúcias fragmento 1: %d\n", minutiae1.size());
-    fprintf(stderr, "[AFIS-LR] Minúcias fragmento 2: %d\n", minutiae2.size());
+    fprintf(stderr, "[AFIS-LR] Minúcias fragmento 1: %d\n", static_cast<int>(minutiae1.size()));
+    fprintf(stderr, "[AFIS-LR] Minúcias fragmento 2: %d\n", static_cast<int>(minutiae2.size()));
     fprintf(stderr, "[AFIS-LR] Tolerância posição: %.1f pixels\n", config.positionTolerance);
     fprintf(stderr, "[AFIS-LR] Tolerância ângulo: %.3f radianos (%.1f graus)\n", 
             config.angleTolerance, config.angleTolerance * 180.0 / M_PI);
@@ -69,7 +69,7 @@ QVector<QPair<int, int>> AFISLikelihoodCalculator::findCorrespondencesWithAlignm
     // Validação defensiva de tamanhos
     if (minutiae1.isEmpty() || minutiae2.isEmpty()) {
         fprintf(stderr, "[AFIS-LR] AVISO: Um dos vetores está vazio (size1=%d, size2=%d)\n",
-                minutiae1.size(), minutiae2.size());
+                static_cast<int>(minutiae1.size()), static_cast<int>(minutiae2.size()));
         return correspondences;
     }
     
@@ -79,7 +79,7 @@ QVector<QPair<int, int>> AFISLikelihoodCalculator::findCorrespondencesWithAlignm
         // Validação adicional dentro do loop
         if (i < 0 || i >= minutiae1.size()) {
             fprintf(stderr, "[AFIS-LR] ERRO CRÍTICO: índice i=%d fora do range [0,%d)\n",
-                    i, minutiae1.size());
+                    i, static_cast<int>(minutiae1.size()));
             break;
         }
         double bestScore = -1.0;
@@ -100,7 +100,7 @@ QVector<QPair<int, int>> AFISLikelihoodCalculator::findCorrespondencesWithAlignm
             // Validação tripla antes de qualquer acesso
             if (j < 0 || j >= minutiae2.size() || j >= matched2.size()) {
                 fprintf(stderr, "[AFIS-LR] ERRO: índice j=%d inválido (minutiae2.size=%d, matched2.size=%d)\n",
-                        j, minutiae2.size(), matched2.size());
+                        j, static_cast<int>(minutiae2.size()), static_cast<int>(matched2.size()));
                 break;
             }
             
@@ -156,14 +156,14 @@ QVector<QPair<int, int>> AFISLikelihoodCalculator::findCorrespondencesWithAlignm
                 fprintf(stderr, "  [AFIS-LR] ✓ MATCH: 1[%d] ↔ 2[%d], score=%.3f\n", i, bestMatch, bestScore);
             } else {
                 fprintf(stderr, "  [AFIS-LR] ERRO: Índice bestMatch=%d fora do range (size=%d)\n", 
-                        bestMatch, minutiae2.size());
+                        bestMatch, static_cast<int>(minutiae2.size()));
             }
         } else {
             fprintf(stderr, "  [AFIS-LR] ✗ SEM MATCH (candidatos=%d, bestScore=%.3f)\n", candidates, bestScore);
         }
     }
     
-    fprintf(stderr, "\n[AFIS-LR] TOTAL DE CORRESPONDÊNCIAS: %d\n", correspondences.size());
+    fprintf(stderr, "\n[AFIS-LR] TOTAL DE CORRESPONDÊNCIAS: %d\n", static_cast<int>(correspondences.size()));
     fprintf(stderr, "[AFIS-LR] ========== FIM DO MATCHING ==========\n\n");
     
     return correspondences;
@@ -281,7 +281,7 @@ double AFISLikelihoodCalculator::calculateLikelihoodRatio(
             if (pair.first < 0 || pair.first >= minutiae1.size() ||
                 pair.second < 0 || pair.second >= minutiae2.size()) {
                 fprintf(stderr, "[AFIS-LR] ERRO: Índice inválido pair[%d,%d] (tamanhos: %d,%d)\n",
-                        pair.first, pair.second, minutiae1.size(), minutiae2.size());
+                        pair.first, pair.second, static_cast<int>(minutiae1.size()), static_cast<int>(minutiae2.size()));
                 continue;
             }
             
@@ -468,7 +468,7 @@ AFISLikelihoodCalculator::GeometricTransform AFISLikelihoodCalculator::estimateT
         // Revalidar tamanhos a cada iteração (pode ter mudado?)
         if (minutiae1.size() < 2 || minutiae2.size() < 2) {
             fprintf(stderr, "[AFIS-TRANSFORM] Tamanhos mudaram durante RANSAC: m1=%d, m2=%d\n",
-                    minutiae1.size(), minutiae2.size());
+                    static_cast<int>(minutiae1.size()), static_cast<int>(minutiae2.size()));
             break;
         }
         

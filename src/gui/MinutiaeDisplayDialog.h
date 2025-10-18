@@ -32,6 +32,7 @@ struct MinutiaeDisplaySettings {
     MinutiaeSymbol symbol = MinutiaeSymbol::CIRCLE;
     int markerSize = 20;              // Tamanho das marcações (pixels)
     int labelFontSize = 10;           // Tamanho da fonte dos rótulos
+    int lineWidth = 2;                // Largura da linha das marcações (pixels)
     QColor markerColor = QColor(255, 0, 0);  // Cor da marcação (vermelho padrão)
     QColor textColor = QColor(255, 0, 0);    // Cor do texto (vermelho padrão)
     QColor labelBackgroundColor = QColor(255, 255, 255, 200);  // Cor de fundo dos rótulos (com alpha)
@@ -68,6 +69,7 @@ private slots:
     void onSymbolChanged(int index);
     void onMarkerSizeChanged(int value);
     void onLabelFontSizeChanged(int value);
+    void onLineWidthChanged(int value);
     void onLabelPositionChanged(int index);
     void onChooseMarkerColor();
     void onChooseTextColor();
@@ -94,6 +96,7 @@ private:
     QComboBox* symbolCombo;
     QSpinBox* markerSizeSpinBox;
     QSpinBox* labelFontSizeSpinBox;
+    QSpinBox* lineWidthSpinBox;
     QComboBox* labelPositionCombo;
     QPushButton* markerColorButton;
     QPushButton* textColorButton;

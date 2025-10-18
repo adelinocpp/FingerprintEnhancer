@@ -47,9 +47,11 @@ signals:
 
     void createFragmentRequested(const QString& imageId);
     void editMinutiaRequested(const QString& minutiaId);
+    void editMinutiaPropertiesRequested(const QString& minutiaId);  // Diálogo unificado
     void deleteImageRequested(const QString& imageId);
     void deleteFragmentRequested(const QString& fragmentId);
     void deleteMinutiaRequested(const QString& minutiaId);
+    void deleteAllMinutiaeRequested(const QString& fragmentId);
 
     void viewOriginalRequested(const QString& imageId, bool isFragment);
     void resetWorkingImageRequested(const QString& id, bool isFragment);

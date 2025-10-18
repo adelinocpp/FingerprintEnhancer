@@ -5,6 +5,7 @@
 #include <QLineEdit>
 #include <QTextEdit>
 #include <QLabel>
+#include <QSpinBox>
 #include <QFormLayout>
 #include <QDialogButtonBox>
 #include <QFileInfo>
@@ -23,10 +24,13 @@ public:
     ~ImagePropertiesDialog() = default;
 
     QString getComments() const { return commentsEdit->toPlainText(); }
+    int getDisplayNumber() const;
+    QString getDisplayName() const;
 
 private:
     void setupUI();
     void loadData();
+    void validateNumber();
 
     FingerprintImage* image;
     
@@ -38,8 +42,13 @@ private:
     QLabel *createdAtLabel;
     QLabel *modifiedAtLabel;
     QLabel *hashLabel;
+    QLabel *uuidLabel;
+    QLabel *rotationLabel;
+    QLabel *transformsLabel;
     
     // Widgets editáveis
+    QSpinBox *numberSpinBox;
+    QLineEdit *nameEdit;
     QTextEdit *commentsEdit;
     
     QDialogButtonBox *buttonBox;

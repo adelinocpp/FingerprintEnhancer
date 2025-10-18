@@ -37,8 +37,9 @@ public:
     );
     ~FragmentExportDialog();
 
-    // Getters para configurações
+    // Getters e Setters para configurações
     QString getFilePath() const { return filePathEdit->text(); }
+    void setSuggestedFileName(const QString& name);  // Sugerir nome de arquivo
     bool includeMinutiae() const { return includeMinutiaeCheck->isChecked(); }
     int getMarkerSize() const { return markerSizeSpinBox->value(); }
     int getFontSize() const { return fontSizeSpinBox->value(); }

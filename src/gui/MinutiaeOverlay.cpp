@@ -457,7 +457,7 @@ void MinutiaeOverlay::contextMenuEvent(QContextMenuEvent *event) {
     fprintf(stderr, "[OVERLAY]    - imageOffset: (%d, %d)\n", imageOffset.x(), imageOffset.y());
     
     if (currentFragment) {
-        fprintf(stderr, "[OVERLAY]    - Número de minúcias no fragmento: %zu\n", currentFragment->minutiae.size());
+        fprintf(stderr, "[OVERLAY]    - Número de minúcias no fragmento: %d\n", static_cast<int>(currentFragment->minutiae.size()));
     }
     fflush(stderr);
     
@@ -592,8 +592,8 @@ Minutia* MinutiaeOverlay::findMinutiaAt(const QPoint& pos) {
     int baseRadius = displaySettings.markerSize / 2;
     int clickRadius = qMax(baseRadius + 15, 30); // Mínimo de 30 pixels de tolerância
     
-    fprintf(stderr, "[OVERLAY] findMinutiaAt: pos=(%d, %d) clickRadius=%d minutiae count=%zu\n", 
-            pos.x(), pos.y(), clickRadius, currentFragment->minutiae.size());
+    fprintf(stderr, "[OVERLAY] findMinutiaAt: pos=(%d, %d) clickRadius=%d minutiae count=%d\n", 
+            pos.x(), pos.y(), clickRadius, static_cast<int>(currentFragment->minutiae.size()));
     fflush(stderr);
 
     for (auto& minutia : currentFragment->minutiae) {
