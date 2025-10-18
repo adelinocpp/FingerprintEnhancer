@@ -189,6 +189,17 @@ private slots:
     void verifyFingerprint();
     void configureAFISMatching();
     void showAFISResults();
+    
+    // Menu Base de Minúcias
+    void consultMinutiaeTypes();
+    void showPopulationStats();
+    void importMinutiaeData();
+    void exportMinutiaeData();
+    
+    // Menu Ajuda
+    void showImageProcessingHelp();
+    void showFragmentComparisonHelp();
+    void showAboutDialog();
 
     // Controles de processamento
     void onBrightnessChanged(int value);

@@ -175,8 +175,44 @@ void FragmentComparisonDialog::setupUI() {
     
     controlLayout->addWidget(paramsGroup);
     
+    // ========== Parâmetros de Likelihood Ratio (LR) ==========
+    QGroupBox* lrGroup = new QGroupBox("Likelihood Ratio (LR) - Neumann et al.");
+    QFormLayout* lrLayout = new QFormLayout(lrGroup);
+    
+    // Modo de cálculo do LR
+    lrModeComboBox = new QComboBox();
+    lrModeComboBox->addItem("Shape Only (Forma)", static_cast<int>(FingerprintEnhancer::LRCalculationMode::SHAPE_ONLY));
+    lrModeComboBox->addItem("Shape + Direction", static_cast<int>(FingerprintEnhancer::LRCalculationMode::SHAPE_DIRECTION));
+    lrModeComboBox->addItem("Shape + Type", static_cast<int>(FingerprintEnhancer::LRCalculationMode::SHAPE_TYPE));
+    lrModeComboBox->addItem("Completo (Shape+Dir+Type)", static_cast<int>(FingerprintEnhancer::LRCalculationMode::COMPLETE));
+    lrModeComboBox->setCurrentIndex(3);  // Completo por padrão
+    lrModeComboBox->setToolTip("Componentes do LR a calcular:\n"
+                                "• Shape: Configuração espacial\n"
+                                "• Direction: Ângulos das minúcias\n"
+                                "• Type: Tipos das minúcias");
+    lrLayout->addRow("Modo de Cálculo:", lrModeComboBox);
+    
+    // Raridade p(v=1|Hd)
+    raritySpinBox = new QDoubleSpinBox();
+    raritySpinBox->setRange(1e-9, 0.1);
+    raritySpinBox->setValue(0.001);  // 1 em 1000
+    raritySpinBox->setDecimals(6);
+    raritySpinBox->setSingleStep(0.0001);
+    raritySpinBox->setToolTip("p(v=1|Hd): Probabilidade de encontrar configuração similar na população\n"
+                               "Valores típicos: 0.001 (1 em 1000) a 0.000001 (1 em 1 milhão)");
+    lrLayout->addRow("Raridade p(v=1|Hd):", raritySpinBox);
+    
+    // Padrão geral (opcional)
+    patternLineEdit = new QLineEdit();
+    patternLineEdit->setPlaceholderText("arch, left_loop, right_loop, whorl");
+    patternLineEdit->setToolTip("Padrão geral da impressão (opcional)\n"
+                                 "Usado para ajustar raridade populacional");
+    lrLayout->addRow("Padrão (opcional):", patternLineEdit);
+    
+    controlLayout->addWidget(lrGroup);
+    
     // Botão de comparar
-    compareButton = new QPushButton("▶ Calcular Score");
+    compareButton = new QPushButton("▶ Calcular Score e LR");
     compareButton->setEnabled(false);
     compareButton->setMinimumHeight(40);
     QFont buttonFont = compareButton->font();
@@ -229,6 +265,37 @@ void FragmentComparisonDialog::setupUI() {
     resultsLayout->addWidget(resultMatchedLabel);
     resultsLayout->addWidget(resultInterpretationLabel);
     resultsLayout->addWidget(resultTimeLabel);
+    
+    // Separador
+    QFrame* separator = new QFrame();
+    separator->setFrameShape(QFrame::HLine);
+    separator->setFrameShadow(QFrame::Sunken);
+    resultsLayout->addWidget(separator);
+    
+    // Labels dos componentes do LR
+    QLabel* componentsTitle = new QLabel("Componentes do LR:");
+    componentsTitle->setFont(interpretFont);
+    resultsLayout->addWidget(componentsTitle);
+    
+    resultLRShapeLabel = new QLabel("LR_shape: -");
+    resultLRDirectionLabel = new QLabel("LR_direction: -");
+    resultLRTypeLabel = new QLabel("LR_type: -");
+    resultRarityLabel = new QLabel("p(v=1|Hd): -");
+    
+    resultLRShapeLabel->setFont(resultFont);
+    resultLRDirectionLabel->setFont(resultFont);
+    resultLRTypeLabel->setFont(resultFont);
+    resultRarityLabel->setFont(resultFont);
+    
+    resultLRShapeLabel->setWordWrap(true);
+    resultLRDirectionLabel->setWordWrap(true);
+    resultLRTypeLabel->setWordWrap(true);
+    resultRarityLabel->setWordWrap(true);
+    
+    resultsLayout->addWidget(resultLRShapeLabel);
+    resultsLayout->addWidget(resultLRDirectionLabel);
+    resultsLayout->addWidget(resultLRTypeLabel);
+    resultsLayout->addWidget(resultRarityLabel);
     
     rightLayout->addWidget(resultsGroup);
     
@@ -315,10 +382,22 @@ void FragmentComparisonDialog::loadFragmentsList() {
             
             fragmentsWithScale++;
             
-            QString displayName = QString("%1 (%2 minúcias, %.1f px/mm)")
-                .arg(QFileInfo(image.originalFilePath).fileName())
+            // Obter número de exibição do fragmento (ex: "02-01")
+            QString fragmentNumber = QString("%1-%2")
+                .arg(image.displayNumber, 2, 10, QChar('0'))
+                .arg(fragment.displayNumber, 2, 10, QChar('0'));
+            
+            // Nome do fragmento ou nome da imagem
+            QString fragmentName = fragment.displayName.isEmpty() 
+                ? QFileInfo(image.originalFilePath).fileName()
+                : fragment.displayName;
+            
+            // Formato: "02-01: Nome (5 minúcias, 52.7 px/mm)"
+            QString displayName = QString("%1: %2 (%3 minúcias, %4 px/mm)")
+                .arg(fragmentNumber)
+                .arg(fragmentName)
                 .arg(fragment.minutiae.size())
-                .arg(fragment.pixelsPerMM);
+                .arg(fragment.pixelsPerMM, 0, 'f', 1);
             
             fragment1Combo->addItem(displayName, fragment.id);
             fragment2Combo->addItem(displayName, fragment.id);
@@ -650,12 +729,40 @@ void FragmentComparisonDialog::onCompareClicked() {
             config.scaleHint, frag1->pixelsPerMM, frag2->pixelsPerMM);
     fprintf(stderr, "[COMPARISON] ==============================================\n\n");
     
+    // Ler configurações do LR
+    FingerprintEnhancer::LRCalculationMode lrMode = 
+        static_cast<FingerprintEnhancer::LRCalculationMode>(lrModeComboBox->currentData().toInt());
+    double rarity = raritySpinBox->value();
+    QString pattern = patternLineEdit->text().trimmed().toLower();
+    
+    fprintf(stderr, "[COMPARISON] ========== CONFIGURAÇÃO LR ==========\n");
+    fprintf(stderr, "[COMPARISON]   - Modo: %d\n", static_cast<int>(lrMode));
+    fprintf(stderr, "[COMPARISON]   - Raridade p(v=1|Hd): %.2e\n", rarity);
+    fprintf(stderr, "[COMPARISON]   - Padrão: %s\n", pattern.isEmpty() ? "não especificado" : pattern.toStdString().c_str());
+    fprintf(stderr, "[COMPARISON] ==============================================\n\n");
+    
     // Executar comparação em thread separada
     QVector<FingerprintEnhancer::Minutia> minutiae1 = frag1->minutiae;
     QVector<FingerprintEnhancer::Minutia> minutiae2 = frag2->minutiae;
     
-    comparisonFuture = QtConcurrent::run([minutiae1, minutiae2, config]() {
-        return compareFragments(minutiae1, minutiae2, config);
+    // Capturar ponteiros para fragmentos (para calcular LR)
+    FingerprintEnhancer::Fragment* frag1Ptr = frag1;
+    FingerprintEnhancer::Fragment* frag2Ptr = frag2;
+    
+    comparisonFuture = QtConcurrent::run([minutiae1, minutiae2, config, frag1Ptr, frag2Ptr, lrMode, rarity, pattern]() {
+        // Primeiro calcular matching AFIS
+        FragmentComparisonResult result = compareFragments(minutiae1, minutiae2, config);
+        
+        // Depois calcular LR usando Neumann et al.
+        FingerprintEnhancer::FingerprintLRCalculator lrCalc;
+        result.lrDetails = lrCalc.calculateLR(frag1Ptr, frag2Ptr, lrMode, pattern, rarity);
+        
+        // Atualizar resultado com valores do LR
+        result.likelihoodRatio = result.lrDetails.lr_total;
+        result.logLR = result.lrDetails.log10_lr_total;
+        result.interpretationText = result.lrDetails.interpretation;
+        
+        return result;
     });
     
     comparisonWatcher->setFuture(comparisonFuture);
@@ -709,6 +816,26 @@ void FragmentComparisonDialog::displayResults(const FragmentComparisonResult& re
     // Tempo
     resultTimeLabel->setText(QString("Tempo de Cálculo: %1 ms")
         .arg(result.executionTimeMs, 0, 'f', 1));
+    
+    // Componentes detalhados do LR (Neumann et al.)
+    if (result.lrDetails.k_minutiae > 0) {
+        resultLRShapeLabel->setText(QString("LR_shape: %1 (configuração espacial)")
+            .arg(result.lrDetails.lr_shape, 0, 'e', 2));
+        
+        resultLRDirectionLabel->setText(QString("LR_direction: %1 (ângulos)")
+            .arg(result.lrDetails.lr_direction, 0, 'e', 2));
+        
+        resultLRTypeLabel->setText(QString("LR_type: %1 (tipos)")
+            .arg(result.lrDetails.lr_type, 0, 'e', 2));
+        
+        resultRarityLabel->setText(QString("p(v=1|Hd): %1 (raridade)")
+            .arg(result.lrDetails.p_v_hd, 0, 'e', 2));
+    } else {
+        resultLRShapeLabel->setText("LR_shape: -");
+        resultLRDirectionLabel->setText("LR_direction: -");
+        resultLRTypeLabel->setText("LR_type: -");
+        resultRarityLabel->setText("p(v=1|Hd): -");
+    }
     
     // Habilitar botão de visualização se houver correspondências
     visualizeButton->setEnabled(result.matchedMinutiae > 0);

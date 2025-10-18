@@ -6,6 +6,9 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QProgressBar>
+#include <QLineEdit>
+#include <QDoubleSpinBox>
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
@@ -14,6 +17,7 @@
 #include "../core/ProjectModel.h"
 #include "../core/MinutiaeTypes.h"
 #include "../afis/AFISLikelihoodCalculator.h"
+#include "../afis/FingerprintLRCalculator.h"
 #include "ImageViewer.h"
 #include "MinutiaeOverlay.h"
 
@@ -35,6 +39,9 @@ struct FragmentComparisonResult {
     QVector<QPair<int, int>> correspondences;  // Pares de índices de minúcias correspondentes
     QString interpretationText;      // Interpretação do resultado
     double executionTimeMs;          // Tempo de execução em ms
+    
+    // Componentes detalhados do LR (Neumann et al.)
+    FingerprintEnhancer::LRResult lrDetails;
     
     FragmentComparisonResult()
         : likelihoodRatio(0.0), logLR(0.0), similarityScore(0.0),
@@ -92,13 +99,18 @@ private:
     QPushButton* closeButton;
     QProgressBar* progressBar;
     
-    // Campos de configuração
+    // Campos de configuração AFIS
     QDoubleSpinBox* positionToleranceSpinBox;
     QCheckBox* useAngleCheckBox;
     QDoubleSpinBox* angleToleranceSpinBox;
     QDoubleSpinBox* minScoreSpinBox;
     QCheckBox* useTypeWeightingCheckBox;
     QCheckBox* useQualityWeightingCheckBox;
+    
+    // Campos de configuração LR (Neumann et al.)
+    QComboBox* lrModeComboBox;
+    QDoubleSpinBox* raritySpinBox;
+    QLineEdit* patternLineEdit;
     
     // Viewers para exibição lado a lado
     ImageViewer* viewer1;
@@ -113,6 +125,12 @@ private:
     QLabel* resultMatchedLabel;
     QLabel* resultInterpretationLabel;
     QLabel* resultTimeLabel;
+    
+    // Labels dos componentes LR (Neumann et al.)
+    QLabel* resultLRShapeLabel;
+    QLabel* resultLRDirectionLabel;
+    QLabel* resultLRTypeLabel;
+    QLabel* resultRarityLabel;
     
     // Dados
     FingerprintEnhancer::Project* project;

@@ -16,6 +16,7 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include "FragmentPropertiesDialog.h"
 #include "FragmentRegionsOverlay.h"
 #include "FragmentComparisonDialog.h"
+#include "AboutDialog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -262,6 +263,21 @@ void MainWindow::createMenus() {
     afisMenu->addSeparator();
     afisMenu->addAction("&Configurar Matching...", this, &MainWindow::configureAFISMatching);
     afisMenu->addAction("&Ver Resultados", this, &MainWindow::showAFISResults);
+    
+    // Menu Base de Minúcias
+    QMenu *minutiaeDBMenu = menuBar()->addMenu("&Base de Minúcias");
+    minutiaeDBMenu->addAction("&Consultar Tipos de Minúcias...", this, &MainWindow::consultMinutiaeTypes);
+    minutiaeDBMenu->addAction("&Estatísticas Populacionais...", this, &MainWindow::showPopulationStats);
+    minutiaeDBMenu->addSeparator();
+    minutiaeDBMenu->addAction("&Importar Dados...", this, &MainWindow::importMinutiaeData);
+    minutiaeDBMenu->addAction("&Exportar Dados...", this, &MainWindow::exportMinutiaeData);
+    
+    // Menu Ajuda
+    QMenu *helpMenu = menuBar()->addMenu("Aj&uda");
+    helpMenu->addAction("&Processamento de Imagem", this, &MainWindow::showImageProcessingHelp, QKeySequence::HelpContents);
+    helpMenu->addAction("&Comparação de Fragmentos", this, &MainWindow::showFragmentComparisonHelp);
+    helpMenu->addSeparator();
+    helpMenu->addAction("&Sobre...", this, &MainWindow::showAboutDialog, QKeySequence("F1"));
 }
 
 void MainWindow::createToolBars() {
@@ -5416,4 +5432,92 @@ void MainWindow::applyGlobalDisplaySettings() {
             settings.getViewTextColor().red(),
             settings.getViewTextColor().green(),
             settings.getViewTextColor().blue());
+}
+
+// ==================== MENU BASE DE MINÚCIAS ====================
+
+void MainWindow::consultMinutiaeTypes() {
+    // TODO: Implementar consulta de tipos de minúcias
+    QMessageBox::information(this, "Base de Minúcias",
+        "Funcionalidade de consulta de tipos de minúcias será implementada em breve.\n\n"
+        "Esta funcionalidade permitirá consultar o inventário de 54 tipos de minúcias "
+        "conforme Gomes et al. (2024).");
+}
+
+void MainWindow::showPopulationStats() {
+    // TODO: Implementar visualização de estatísticas populacionais
+    QMessageBox::information(this, "Estatísticas Populacionais",
+        "Funcionalidade de estatísticas populacionais será implementada em breve.\n\n"
+        "Esta funcionalidade exibirá:\n"
+        "• Frequências de tipos de minúcias (população brasileira)\n"
+        "• Médias por padrão geral (arch, loop, whorl)\n"
+        "• Matriz de confusão de examinadores");
+}
+
+void MainWindow::importMinutiaeData() {
+    // TODO: Implementar importação de dados
+    QMessageBox::information(this, "Importar Dados",
+        "Funcionalidade de importação será implementada em breve.\n\n"
+        "Formatos suportados:\n"
+        "• CSV com estatísticas populacionais\n"
+        "• JSON com tipos de minúcias\n"
+        "• Dados de estudos científicos");
+}
+
+void MainWindow::exportMinutiaeData() {
+    // TODO: Implementar exportação de dados
+    QMessageBox::information(this, "Exportar Dados",
+        "Funcionalidade de exportação será implementada em breve.\n\n"
+        "Permitirá exportar:\n"
+        "• Minúcias marcadas do projeto\n"
+        "• Estatísticas calculadas\n"
+        "• Resultados de comparações");
+}
+
+// ==================== MENU AJUDA ====================
+
+void MainWindow::showImageProcessingHelp() {
+    // TODO: Implementar ajuda de processamento de imagem
+    QMessageBox::information(this, "Ajuda - Processamento de Imagem",
+        "=== PROCESSAMENTO DE IMAGEM ===\n\n"
+        
+        "FILTROS DISPONÍVEIS:\n"
+        "• FFT (Ctrl+F): Filtro no domínio da frequência\n"
+        "• Subtrair Fundo (Ctrl+B): Remove gradientes de iluminação\n"
+        "• Gabor: Realce de cristas papilares\n"
+        "• Equalizar Histograma: Melhora contraste\n"
+        "• Binarização: Conversão para preto e branco\n"
+        "• Esqueletização (Ctrl+K): Afinamento de cristas\n\n"
+        
+        "DICA: Aplique filtros em sequência para melhores resultados.\n"
+        "Exemplo: FFT → Equalizar → Binarizar → Esqueletizar");
+}
+
+void MainWindow::showFragmentComparisonHelp() {
+    // TODO: Implementar ajuda de comparação de fragmentos
+    QMessageBox::information(this, "Ajuda - Comparação de Fragmentos",
+        "=== COMPARAÇÃO DE FRAGMENTOS ===\n\n"
+        
+        "CÁLCULO DE LIKELIHOOD RATIO (LR):\n\n"
+        
+        "MODOS DE CÁLCULO:\n"
+        "• Shape Only: Apenas configuração espacial\n"
+        "• Shape + Direction: Adiciona ângulos\n"
+        "• Shape + Type: Adiciona tipos de minúcias\n"
+        "• Completo: Todos os componentes\n\n"
+        
+        "INTERPRETAÇÃO (Escala ENFSI):\n"
+        "• log₁₀(LR) < 0: Suporta Hd (NÃO é suspeito)\n"
+        "• log₁₀(LR) 0-1: Suporte limitado\n"
+        "• log₁₀(LR) 1-2: Suporte moderado\n"
+        "• log₁₀(LR) 2-4: Suporte forte\n"
+        "• log₁₀(LR) 4-6: Suporte muito forte\n"
+        "• log₁₀(LR) > 6: Suporte extremamente forte\n\n"
+        
+        "Baseado em: Neumann et al. (2015) e Gomes et al. (2024)");
+}
+
+void MainWindow::showAboutDialog() {
+    AboutDialog dialog(this);
+    dialog.exec();
 }

@@ -8,6 +8,7 @@
 #include <iostream>
 
 #include "gui/MainWindow.h"
+#include "gui/SplashScreen.h"
 #include "core/TranslationManager_Simple.h"
 
 // Configurar logging do Qt
@@ -220,7 +221,16 @@ int main(int argc, char *argv[]) {
     }
     
     try {
+        // Exibir splash screen
+        SplashScreen splash;
+        splash.show();
+        splash.showMessage("Inicializando sistema...");
+        app.processEvents();
+        
         // Inicializar sistema de tradução simplificado
+        splash.showMessage("Carregando traduções...");
+        app.processEvents();
+        
         TranslationManager& translationManager = TranslationManager::instance();
 
         // Definir idioma padrão como Português
@@ -230,8 +240,16 @@ int main(int argc, char *argv[]) {
                           << translationManager.getLanguageCode(TranslationManager::PORTUGUESE_BR).c_str();
         
         // Criar e mostrar janela principal
+        splash.showMessage("Carregando interface...");
+        app.processEvents();
+        
         MainWindow window;
+        
+        splash.showMessage("Finalizando...");
+        app.processEvents();
+        
         window.show();
+        splash.finish(&window);
         
         // Carregar arquivo de projeto se especificado
         if (!projectFile.isEmpty()) {
