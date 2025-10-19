@@ -41,6 +41,16 @@ public:
     void setSelectedMinutia(const QString& minutiaId);
     QString getSelectedMinutiaId() const { return selectedMinutiaId; }
     void clearSelection();
+    
+    // Destaque customizado para associação manual
+    void setHighlightColor(const QColor& color) { highlightColor = color; update(); }
+    void setConnectionLine(const QPointF& startPos, const QPointF& endPos) {
+        hasConnectionLine = true;
+        connectionLineStart = startPos;
+        connectionLineEnd = endPos;
+        update();
+    }
+    void clearConnectionLine() { hasConnectionLine = false; update(); }
 
     // Modo de edição interativa
     void setEditMode(bool enabled) { 
@@ -120,6 +130,12 @@ private:
     QColor normalColor;
     QColor selectedColor;
     QColor hoverColor;
+    QColor highlightColor;
+    
+    // Linha de conexão para associação manual
+    bool hasConnectionLine;
+    QPointF connectionLineStart;
+    QPointF connectionLineEnd;
 
     // Helper functions
     void drawMinutia(QPainter& painter, const Minutia& minutia, bool isSelected);

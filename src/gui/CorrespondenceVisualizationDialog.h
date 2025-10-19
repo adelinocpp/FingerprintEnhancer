@@ -3,13 +3,20 @@
 
 #include <QDialog>
 #include <QLabel>
-#include <QPushButton>
-#include <QVBoxLayout>
-#include <QPainter>
+#include <QPixmap>
+#include <QVector>
+#include <QPair>
+#include <QComboBox>
 #include <QSpinBox>
 #include <QCheckBox>
-#include <QComboBox>
+#include <QPushButton>
+#include <QScrollArea>
+#include <QSlider>
+#include <QVBoxLayout>
+#include <QPainter>
+#include <opencv2/opencv.hpp>
 #include "../core/ProjectModel.h"
+#include "../core/MinutiaeTypes.h"
 
 /**
  * @brief Diálogo para visualizar correspondências entre minúcias de dois fragmentos
@@ -36,6 +43,14 @@ private:
     QColor getBackgroundColor() const;
 
     QLabel* imageLabel;
+    QScrollArea* scrollArea;
+    QPushButton* zoomInButton;
+    QPushButton* zoomOutButton;
+    QPushButton* zoomFitButton;
+    QPushButton* zoom100Button;
+    QSlider* zoomSlider;
+    QLabel* zoomLabel;
+    double currentZoom;
     QPushButton* saveButton;
     QPushButton* applySettingsButton;
     QPushButton* closeButton;
@@ -78,6 +93,11 @@ private slots:
     void onTextColorClicked();
     void onLabelBgColorClicked();
     void onLabelOpacityChanged(int value);
+    void onZoomIn();
+    void onZoomOut();
+    void onZoomFit();
+    void onZoom100();
+    void onZoomSliderChanged(int value);
 };
 
 #endif // CORRESPONDENCEVISUALIZATIONDIALOG_H

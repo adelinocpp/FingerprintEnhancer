@@ -14,13 +14,14 @@
 
 CorrespondenceVisualizationDialog::CorrespondenceVisualizationDialog(QWidget *parent)
     : QDialog(parent),
+      currentZoom(1.0),
       markerColor(145, 65, 172),
       textColor(145, 65, 172),
       labelBgColor(255, 255, 255),
       labelOpacity(100)
 {
     setWindowTitle("Visualização de Correspondências");
-    resize(1400, 700);
+    resize(1400, 800);
     
     setupUI();
     loadSettings();
@@ -167,11 +168,51 @@ void CorrespondenceVisualizationDialog::setupUI() {
     // === COLUNA DIREITA: Preview ===
     QVBoxLayout* previewLayout = new QVBoxLayout();
     
-    // Label para exibir imagem
+    // Controles de zoom
+    QHBoxLayout* zoomLayout = new QHBoxLayout();
+    zoomInButton = new QPushButton("➕");
+    zoomInButton->setToolTip("Ampliar (Zoom In)");
+    zoomInButton->setMaximumWidth(40);
+    
+    zoomOutButton = new QPushButton("➖");
+    zoomOutButton->setToolTip("Reduzir (Zoom Out)");
+    zoomOutButton->setMaximumWidth(40);
+    
+    zoom100Button = new QPushButton("100%");
+    zoom100Button->setToolTip("Zoom Real (100%)");
+    zoom100Button->setMaximumWidth(60);
+    
+    zoomFitButton = new QPushButton("⬜ Ajustar");
+    zoomFitButton->setToolTip("Ajustar à Janela");
+    
+    zoomSlider = new QSlider(Qt::Horizontal);
+    zoomSlider->setRange(10, 400);  // 10% a 400%
+    zoomSlider->setValue(100);
+    zoomSlider->setToolTip("Controle de Zoom");
+    
+    zoomLabel = new QLabel("100%");
+    zoomLabel->setMinimumWidth(50);
+    zoomLabel->setAlignment(Qt::AlignCenter);
+    
+    zoomLayout->addWidget(zoomOutButton);
+    zoomLayout->addWidget(zoomInButton);
+    zoomLayout->addWidget(zoom100Button);
+    zoomLayout->addWidget(zoomFitButton);
+    zoomLayout->addWidget(zoomSlider, 1);
+    zoomLayout->addWidget(zoomLabel);
+    previewLayout->addLayout(zoomLayout);
+    
+    // Área de scroll para exibir imagem com zoom
+    scrollArea = new QScrollArea();
+    scrollArea->setWidgetResizable(false);  // Não redimensionar automaticamente
+    scrollArea->setAlignment(Qt::AlignCenter);
+    scrollArea->setStyleSheet("QScrollArea { background-color: #2b2b2b; }");
+    
     imageLabel = new QLabel();
     imageLabel->setAlignment(Qt::AlignCenter);
-    imageLabel->setStyleSheet("QLabel { background-color: #2b2b2b; }");
-    previewLayout->addWidget(imageLabel, 1);
+    imageLabel->setScaledContents(false);
+    scrollArea->setWidget(imageLabel);
+    previewLayout->addWidget(scrollArea, 1);
     
     // Botões de ação
     QHBoxLayout* buttonLayout = new QHBoxLayout();
@@ -186,6 +227,13 @@ void CorrespondenceVisualizationDialog::setupUI() {
     
     connect(saveButton, &QPushButton::clicked, this, &CorrespondenceVisualizationDialog::onSaveClicked);
     connect(closeButton, &QPushButton::clicked, this, &QDialog::accept);
+    
+    // Conectar controles de zoom
+    connect(zoomInButton, &QPushButton::clicked, this, &CorrespondenceVisualizationDialog::onZoomIn);
+    connect(zoomOutButton, &QPushButton::clicked, this, &CorrespondenceVisualizationDialog::onZoomOut);
+    connect(zoom100Button, &QPushButton::clicked, this, &CorrespondenceVisualizationDialog::onZoom100);
+    connect(zoomFitButton, &QPushButton::clicked, this, &CorrespondenceVisualizationDialog::onZoomFit);
+    connect(zoomSlider, &QSlider::valueChanged, this, &CorrespondenceVisualizationDialog::onZoomSliderChanged);
 }
 
 void CorrespondenceVisualizationDialog::loadSettings() {
@@ -283,6 +331,50 @@ void CorrespondenceVisualizationDialog::onLabelOpacityChanged(int value) {
 
 QColor CorrespondenceVisualizationDialog::getBackgroundColor() const {
     return whiteBackgroundCheck->isChecked() ? QColor(255, 255, 255) : QColor(43, 43, 43);
+}
+
+void CorrespondenceVisualizationDialog::onZoomIn() {
+    int newValue = qMin(400, zoomSlider->value() + 25);
+    zoomSlider->setValue(newValue);
+}
+
+void CorrespondenceVisualizationDialog::onZoomOut() {
+    int newValue = qMax(10, zoomSlider->value() - 25);
+    zoomSlider->setValue(newValue);
+}
+
+void CorrespondenceVisualizationDialog::onZoom100() {
+    zoomSlider->setValue(100);
+}
+
+void CorrespondenceVisualizationDialog::onZoomFit() {
+    if (visualizationPixmap.isNull()) return;
+    
+    // Calcular zoom para caber na área disponível
+    QSize availableSize = scrollArea->viewport()->size();
+    QSize pixmapSize = visualizationPixmap.size();
+    
+    double zoomH = static_cast<double>(availableSize.width()) / pixmapSize.width();
+    double zoomV = static_cast<double>(availableSize.height()) / pixmapSize.height();
+    double fitZoom = qMin(zoomH, zoomV);
+    
+    int zoomPercent = qBound(10, static_cast<int>(fitZoom * 100), 400);
+    zoomSlider->setValue(zoomPercent);
+}
+
+void CorrespondenceVisualizationDialog::onZoomSliderChanged(int value) {
+    currentZoom = value / 100.0;
+    zoomLabel->setText(QString("%1%").arg(value));
+    
+    if (!visualizationPixmap.isNull()) {
+        QPixmap zoomedPixmap = visualizationPixmap.scaled(
+            visualizationPixmap.size() * currentZoom,
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation
+        );
+        imageLabel->setPixmap(zoomedPixmap);
+        imageLabel->adjustSize();
+    }
 }
 
 void CorrespondenceVisualizationDialog::setData(
@@ -454,9 +546,14 @@ void CorrespondenceVisualizationDialog::generateVisualization() {
     
     visualizationPixmap = pixmap;
     
-    // Escalar para caber na janela se necessário
-    QPixmap scaledPixmap = pixmap.scaled(imageLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    imageLabel->setPixmap(scaledPixmap);
+    // Aplicar zoom
+    if (currentZoom != 1.0) {
+        QPixmap zoomedPixmap = pixmap.scaled(pixmap.size() * currentZoom, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        imageLabel->setPixmap(zoomedPixmap);
+    } else {
+        imageLabel->setPixmap(pixmap);
+    }
+    imageLabel->adjustSize();
 }
 
 void CorrespondenceVisualizationDialog::drawMinutiaMarker(QPainter& painter, const QPoint& pos, int number, const QColor& color, int radius, int fontSize) {

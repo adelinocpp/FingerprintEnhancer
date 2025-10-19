@@ -181,6 +181,8 @@ TESTE_COMPLETO_RESULTADO.md
 *.bat
 *.md
 */*.md
+*.html
+*.pdf
 
 # Ignora todos os arquivos .md
 COMO_TESTAR_DEBUG.md

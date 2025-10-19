@@ -12,11 +12,15 @@
 #include <QTimer>
 #include <QEvent>
 #include <QWheelEvent>
+#include <QMenu>
+#include <QApplication>
 #include <cmath>
 
 FragmentComparisonDialog::FragmentComparisonDialog(QWidget *parent)
     : QDialog(parent)
     , project(nullptr)
+    , selectedMinutia1(-1)
+    , selectedMinutia2(-1)
     , comparisonWatcher(nullptr)
 {
     setWindowTitle("Comparação 1:1 de Fragmentos");
@@ -77,6 +81,65 @@ void FragmentComparisonDialog::setupUI() {
     
     viewerSplitter->setSizes(QList<int>() << 500 << 500);
     leftLayout->addWidget(viewerSplitter, 1);
+    
+    // ==================== PAINEL DE ASSOCIAÇÃO MANUAL ====================
+    manualMatchGroup = new QGroupBox("📌 Associação Manual de Minúcias");
+    manualMatchGroup->setCheckable(false);
+    QVBoxLayout* manualLayout = new QVBoxLayout(manualMatchGroup);
+    
+    // Checkbox para usar associações manuais
+    useManualMatchesCheckBox = new QCheckBox("Usar associações manuais no cálculo do LR");
+    useManualMatchesCheckBox->setChecked(false);
+    useManualMatchesCheckBox->setToolTip("Quando ativado, as minúcias do fragmento 2 serão reordenadas conforme as associações manuais");
+    manualLayout->addWidget(useManualMatchesCheckBox);
+    
+    // Controles de entrada
+    QHBoxLayout* inputLayout = new QHBoxLayout();
+    
+    QLabel* lblMin1 = new QLabel("Minúcia Frag1:");
+    minutia1IndexSpinBox = new QSpinBox();
+    minutia1IndexSpinBox->setMinimum(1);
+    minutia1IndexSpinBox->setMaximum(1);
+    minutia1IndexSpinBox->setToolTip("Índice da minúcia no fragmento 1 (começando em 1)");
+    
+    QLabel* lblMin2 = new QLabel("↔ Frag2:");
+    minutia2IndexSpinBox = new QSpinBox();
+    minutia2IndexSpinBox->setMinimum(1);
+    minutia2IndexSpinBox->setMaximum(1);
+    minutia2IndexSpinBox->setToolTip("Índice da minúcia no fragmento 2 (começando em 1)");
+    
+    addMatchButton = new QPushButton("➕ Adicionar");
+    addMatchButton->setToolTip("Adicionar associação manual");
+    
+    autoMatchButton = new QPushButton("🔗 Associar Todas");
+    autoMatchButton->setToolTip("Associar automaticamente todas as minúcias por índice (1↔1, 2↔2, ...)");
+    
+    inputLayout->addWidget(lblMin1);
+    inputLayout->addWidget(minutia1IndexSpinBox);
+    inputLayout->addWidget(lblMin2);
+    inputLayout->addWidget(minutia2IndexSpinBox);
+    inputLayout->addWidget(addMatchButton);
+    inputLayout->addWidget(autoMatchButton);
+    inputLayout->addStretch();
+    manualLayout->addLayout(inputLayout);
+    
+    // Lista de associações
+    manualMatchList = new QListWidget();
+    manualMatchList->setMaximumHeight(100);
+    manualMatchList->setToolTip("Clique para destacar minúcias associadas | Botão direito para remover");
+    manualMatchList->setContextMenuPolicy(Qt::CustomContextMenu);
+    manualLayout->addWidget(manualMatchList);
+    
+    // Botões de gerenciamento
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    removeMatchButton = new QPushButton("🗑️ Remover Selecionado");
+    clearMatchButton = new QPushButton("🧹 Limpar Todos");
+    buttonLayout->addWidget(removeMatchButton);
+    buttonLayout->addWidget(clearMatchButton);
+    buttonLayout->addStretch();
+    manualLayout->addLayout(buttonLayout);
+    
+    leftLayout->addWidget(manualMatchGroup);
     
     mainLayout->addWidget(leftPanel, 3);  // 75% do espaço
     
@@ -338,6 +401,47 @@ void FragmentComparisonDialog::setupUI() {
     connect(closeButton, &QPushButton::clicked,
             this, &QDialog::accept);
     
+    // Conectar sinais de associação manual
+    connect(addMatchButton, &QPushButton::clicked,
+            this, &FragmentComparisonDialog::onAddManualMatch);
+    connect(autoMatchButton, &QPushButton::clicked,
+            this, &FragmentComparisonDialog::onAutoMatchByIndex);
+    connect(removeMatchButton, &QPushButton::clicked,
+            this, &FragmentComparisonDialog::onRemoveManualMatch);
+    connect(clearMatchButton, &QPushButton::clicked,
+            this, &FragmentComparisonDialog::onClearManualMatches);
+    connect(useManualMatchesCheckBox, &QCheckBox::toggled,
+            this, &FragmentComparisonDialog::onUseManualMatchesToggled);
+    
+    // Conectar sinais da lista de associações
+    connect(manualMatchList, &QListWidget::itemClicked,
+            this, &FragmentComparisonDialog::onManualMatchListClicked);
+    connect(manualMatchList, &QListWidget::customContextMenuRequested,
+            this, &FragmentComparisonDialog::onManualMatchListContextMenu);
+    
+    // Conectar sinais de clique dos overlays para seleção interativa
+    connect(overlay1, &FingerprintEnhancer::MinutiaeOverlay::minutiaClicked,
+            [this](const QString& minutiaId, const QPoint& pos) {
+        Q_UNUSED(minutiaId);
+        Q_UNUSED(pos);
+        QPoint globalPos = overlay1->mapToGlobal(pos);
+        onViewer1Clicked(overlay1->mapFromGlobal(globalPos), QApplication::keyboardModifiers());
+    });
+    
+    connect(overlay2, &FingerprintEnhancer::MinutiaeOverlay::minutiaClicked,
+            [this](const QString& minutiaId, const QPoint& pos) {
+        Q_UNUSED(minutiaId);
+        Q_UNUSED(pos);
+        QPoint globalPos = overlay2->mapToGlobal(pos);
+        onViewer2Clicked(overlay2->mapFromGlobal(globalPos), QApplication::keyboardModifiers());
+    });
+    
+    // Habilitar captura de eventos de mouse nos overlays (sem modo de edição completo)
+    overlay1->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    overlay2->setAttribute(Qt::WA_TransparentForMouseEvents, false);
+    overlay1->setMouseTracking(true);
+    overlay2->setMouseTracking(true);
+    
     // Conectar sinais de zoom/scroll dos viewers aos overlays
     connect(viewer1, &ImageViewer::zoomChanged,
             this, &FragmentComparisonDialog::onViewer1ZoomChanged);
@@ -454,6 +558,19 @@ void FragmentComparisonDialog::onFragment1Changed(int index) {
     
     displayFragment(fragment, viewer1, overlay1);
     
+    // Atualizar máximo do spinbox de minúcia 1
+    minutia1IndexSpinBox->setMaximum(qMax(1, static_cast<int>(fragment->minutiae.size())));
+    
+    // Limpar associações manuais ao trocar fragmento
+    if (!manualMatches.isEmpty()) {
+        manualMatches.clear();
+        manualMatchList->clear();
+        selectedMinutia1 = -1;
+        selectedMinutia2 = -1;
+        updateOverlayHighlight();
+        qDebug() << "[MANUAL MATCH] Associações limpas ao trocar Fragmento 1";
+    }
+    
     // Habilitar botão se ambos fragmentos estão selecionados
     compareButton->setEnabled(fragment1Combo->currentIndex() >= 0 &&
                              fragment2Combo->currentIndex() >= 0 &&
@@ -471,6 +588,19 @@ void FragmentComparisonDialog::onFragment2Changed(int index) {
     
     displayFragment(fragment, viewer2, overlay2);
     
+    // Atualizar máximo do spinbox de minúcia 2
+    minutia2IndexSpinBox->setMaximum(qMax(1, static_cast<int>(fragment->minutiae.size())));
+    
+    // Limpar associações manuais ao trocar fragmento
+    if (!manualMatches.isEmpty()) {
+        manualMatches.clear();
+        manualMatchList->clear();
+        selectedMinutia1 = -1;
+        selectedMinutia2 = -1;
+        updateOverlayHighlight();
+        qDebug() << "[MANUAL MATCH] Associações limpas ao trocar Fragmento 2";
+    }
+    
     // Habilitar botão se ambos fragmentos estão selecionados
     compareButton->setEnabled(fragment1Combo->currentIndex() >= 0 &&
                              fragment2Combo->currentIndex() >= 0 &&
@@ -480,6 +610,16 @@ void FragmentComparisonDialog::onFragment2Changed(int index) {
 }
 
 void FragmentComparisonDialog::onSwapFragments() {
+    // Limpar associações antes de trocar
+    if (!manualMatches.isEmpty()) {
+        manualMatches.clear();
+        manualMatchList->clear();
+        selectedMinutia1 = -1;
+        selectedMinutia2 = -1;
+        updateOverlayHighlight();
+        qDebug() << "[MANUAL MATCH] Associações limpas ao trocar fragmentos (swap)";
+    }
+    
     int temp = fragment1Combo->currentIndex();
     fragment1Combo->setCurrentIndex(fragment2Combo->currentIndex());
     fragment2Combo->setCurrentIndex(temp);
@@ -915,3 +1055,349 @@ FragmentComparisonResult FragmentComparisonDialog::compareFragments(
 }
 
 // Funções de cálculo migradas para AFISLikelihoodCalculator em src/afis/
+
+// ==================== ASSOCIAÇÃO MANUAL DE MINÚCIAS ====================
+
+void FragmentComparisonDialog::onAddManualMatch() {
+    int idx1 = minutia1IndexSpinBox->value() - 1;  // Converter para 0-indexed
+    int idx2 = minutia2IndexSpinBox->value() - 1;
+    
+    // Validar índices
+    int frag1Idx = fragment1Combo->currentIndex();
+    int frag2Idx = fragment2Combo->currentIndex();
+    
+    if (frag1Idx < 0 || frag1Idx >= availableFragments.size() ||
+        frag2Idx < 0 || frag2Idx >= availableFragments.size()) {
+        QMessageBox::warning(this, "Erro", "Selecione dois fragmentos válidos.");
+        return;
+    }
+    
+    FingerprintEnhancer::Fragment* frag1 = availableFragments[frag1Idx];
+    FingerprintEnhancer::Fragment* frag2 = availableFragments[frag2Idx];
+    
+    if (idx1 < 0 || idx1 >= frag1->minutiae.size() ||
+        idx2 < 0 || idx2 >= frag2->minutiae.size()) {
+        QMessageBox::warning(this, "Erro", "Índices de minúcias inválidos.");
+        return;
+    }
+    
+    // Verificar se já existe
+    for (const auto& match : manualMatches) {
+        if (match.first == idx1 || match.second == idx2) {
+            QMessageBox::warning(this, "Duplicado",
+                QString("Já existe uma associação envolvendo estas minúcias.\n"
+                        "Minúcia %1 do Frag1 ou Minúcia %2 do Frag2 já foram associadas.")
+                .arg(idx1 + 1).arg(idx2 + 1));
+            return;
+        }
+    }
+    
+    // Adicionar
+    manualMatches.append(QPair<int, int>(idx1, idx2));
+    manualMatchList->addItem(QString("%1 ↔ %2").arg(idx1 + 1).arg(idx2 + 1));
+    
+    qDebug() << QString("[MANUAL MATCH] Adicionada: Frag1[%1] ↔ Frag2[%2]")
+        .arg(idx1).arg(idx2);
+}
+
+void FragmentComparisonDialog::onRemoveManualMatch() {
+    int currentRow = manualMatchList->currentRow();
+    if (currentRow < 0 || currentRow >= manualMatches.size()) {
+        QMessageBox::information(this, "Nenhuma Seleção",
+            "Selecione uma associação para remover.");
+        return;
+    }
+    
+    manualMatches.removeAt(currentRow);
+    delete manualMatchList->takeItem(currentRow);
+    
+    qDebug() << QString("[MANUAL MATCH] Removida associação na posição %1").arg(currentRow);
+}
+
+void FragmentComparisonDialog::onClearManualMatches() {
+    if (manualMatches.isEmpty()) return;
+    
+    auto reply = QMessageBox::question(this, "Confirmar Limpeza",
+        QString("Deseja remover todas as %1 associações manuais?")
+        .arg(manualMatches.size()),
+        QMessageBox::Yes | QMessageBox::No);
+    
+    if (reply == QMessageBox::Yes) {
+        manualMatches.clear();
+        manualMatchList->clear();
+        qDebug() << "[MANUAL MATCH] Todas as associações foram limpas";
+    }
+}
+
+void FragmentComparisonDialog::onUseManualMatchesToggled(bool checked) {
+    qDebug() << QString("[MANUAL MATCH] Usar associações manuais: %1")
+        .arg(checked ? "SIM" : "NÃO");
+    
+    if (checked && manualMatches.isEmpty()) {
+        QMessageBox::information(this, "Nenhuma Associação",
+            "Adicione associações manuais antes de ativar esta opção.");
+        useManualMatchesCheckBox->setChecked(false);
+    }
+}
+
+// ==================== SELEÇÃO INTERATIVA DE MINÚCIAS ====================
+
+QPointF FragmentComparisonDialog::viewportToScene(const QPoint& viewportPos, ImageViewer* viewer) {
+    // Converter posição do viewport para coordenadas da imagem (scene)
+    QPoint widgetPos = viewer->viewport()->mapToParent(viewportPos);
+    QPoint imagePos = viewer->widgetToImage(widgetPos);
+    return QPointF(imagePos);
+}
+
+int FragmentComparisonDialog::findNearestMinutia(
+    const QVector<FingerprintEnhancer::Minutia>& minutiae,
+    QPointF scenePos, 
+    double maxDistance) {
+    
+    int nearestIdx = -1;
+    double minDist = maxDistance;
+    
+    for (int i = 0; i < minutiae.size(); ++i) {
+        QPointF minutiaPos(minutiae[i].position.x(), minutiae[i].position.y());
+        double dist = QLineF(scenePos, minutiaPos).length();
+        
+        if (dist < minDist) {
+            minDist = dist;
+            nearestIdx = i;
+        }
+    }
+    
+    return nearestIdx;
+}
+
+void FragmentComparisonDialog::updateOverlayHighlight() {
+    // Atualizar destaque visual nos overlays
+    int frag1Idx = fragment1Combo->currentIndex();
+    int frag2Idx = fragment2Combo->currentIndex();
+    
+    if (frag1Idx < 0 || frag1Idx >= availableFragments.size() ||
+        frag2Idx < 0 || frag2Idx >= availableFragments.size()) {
+        return;
+    }
+    
+    FingerprintEnhancer::Fragment* frag1 = availableFragments[frag1Idx];
+    FingerprintEnhancer::Fragment* frag2 = availableFragments[frag2Idx];
+    
+    // Limpar seleção anterior
+    overlay1->clearSelection();
+    overlay2->clearSelection();
+    
+    // Destacar minúcias selecionadas
+    if (selectedMinutia1 >= 0 && selectedMinutia1 < frag1->minutiae.size()) {
+        overlay1->setSelectedMinutia(frag1->minutiae[selectedMinutia1].id);
+    }
+    
+    if (selectedMinutia2 >= 0 && selectedMinutia2 < frag2->minutiae.size()) {
+        overlay2->setSelectedMinutia(frag2->minutiae[selectedMinutia2].id);
+    }
+    
+    overlay1->update();
+    overlay2->update();
+}
+
+void FragmentComparisonDialog::onViewer1Clicked(QPoint pos, Qt::KeyboardModifiers modifiers) {
+    int frag1Idx = fragment1Combo->currentIndex();
+    if (frag1Idx < 0 || frag1Idx >= availableFragments.size()) return;
+    
+    FingerprintEnhancer::Fragment* frag1 = availableFragments[frag1Idx];
+    
+    // Converter posição do clique para coordenadas da imagem
+    QPointF scenePos = viewportToScene(pos, viewer1);
+    
+    // Encontrar minúcia mais próxima
+    int minutiaIdx = findNearestMinutia(frag1->minutiae, scenePos, 15.0);
+    
+    if (minutiaIdx >= 0) {
+        qDebug() << QString("[INTERACTIVE] Frag1: Minúcia %1 clicada").arg(minutiaIdx + 1);
+        
+        selectedMinutia1 = minutiaIdx;
+        minutia1IndexSpinBox->setValue(minutiaIdx + 1);
+        
+        // Se já tinha uma minúcia do frag2 selecionada, criar associação automaticamente
+        if (selectedMinutia2 >= 0) {
+            onAddManualMatch();
+            selectedMinutia1 = -1;
+            selectedMinutia2 = -1;
+        }
+        
+        updateOverlayHighlight();
+    }
+}
+
+void FragmentComparisonDialog::onViewer2Clicked(QPoint pos, Qt::KeyboardModifiers modifiers) {
+    int frag2Idx = fragment2Combo->currentIndex();
+    if (frag2Idx < 0 || frag2Idx >= availableFragments.size()) return;
+    
+    FingerprintEnhancer::Fragment* frag2 = availableFragments[frag2Idx];
+    
+    // Converter posição do clique para coordenadas da imagem
+    QPointF scenePos = viewportToScene(pos, viewer2);
+    
+    // Encontrar minúcia mais próxima
+    int minutiaIdx = findNearestMinutia(frag2->minutiae, scenePos, 15.0);
+    
+    if (minutiaIdx >= 0) {
+        qDebug() << QString("[INTERACTIVE] Frag2: Minúcia %1 clicada (Shift=%2)")
+            .arg(minutiaIdx + 1).arg((modifiers & Qt::ShiftModifier) ? "SIM" : "NÃO");
+        
+        selectedMinutia2 = minutiaIdx;
+        minutia2IndexSpinBox->setValue(minutiaIdx + 1);
+        
+        // Se Shift está pressionado E tem minúcia do frag1 selecionada, criar associação
+        if ((modifiers & Qt::ShiftModifier) && selectedMinutia1 >= 0) {
+            onAddManualMatch();
+            selectedMinutia1 = -1;
+            selectedMinutia2 = -1;
+        }
+        
+        updateOverlayHighlight();
+    }
+}
+
+void FragmentComparisonDialog::onViewerContextMenu(const QPoint& pos, int viewerIndex) {
+    Q_UNUSED(pos);
+    Q_UNUSED(viewerIndex);
+    
+    QMenu contextMenu(this);
+    
+    QAction* addAction = contextMenu.addAction("➕ Adicionar Associação");
+    addAction->setEnabled(selectedMinutia1 >= 0 && selectedMinutia2 >= 0);
+    connect(addAction, &QAction::triggered, this, &FragmentComparisonDialog::onAddManualMatch);
+    
+    contextMenu.addSeparator();
+    
+    QAction* clearSelection = contextMenu.addAction("Limpar Seleção");
+    connect(clearSelection, &QAction::triggered, [this]() {
+        selectedMinutia1 = -1;
+        selectedMinutia2 = -1;
+        updateOverlayHighlight();
+    });
+    
+    contextMenu.exec(QCursor::pos());
+}
+
+void FragmentComparisonDialog::onManualMatchListClicked(QListWidgetItem* item) {
+    int row = manualMatchList->row(item);
+    if (row < 0 || row >= manualMatches.size()) return;
+    
+    qDebug() << QString("[MANUAL MATCH] Clicado na associação %1 da lista").arg(row);
+    highlightAssociationInViewers(row);
+}
+
+void FragmentComparisonDialog::onManualMatchListContextMenu(const QPoint& pos) {
+    QListWidgetItem* item = manualMatchList->itemAt(pos);
+    if (!item) return;
+    
+    int row = manualMatchList->row(item);
+    if (row < 0 || row >= manualMatches.size()) return;
+    
+    QMenu contextMenu(this);
+    
+    QAction* removeAction = contextMenu.addAction("🗑️ Remover Esta Associação");
+    connect(removeAction, &QAction::triggered, [this, row]() {
+        if (row < manualMatches.size()) {
+            QPair<int, int> match = manualMatches[row];
+            manualMatches.removeAt(row);
+            delete manualMatchList->takeItem(row);
+            
+            qDebug() << QString("[MANUAL MATCH] Removida associação %1↔%2 via menu de contexto")
+                .arg(match.first + 1).arg(match.second + 1);
+        }
+    });
+    
+    contextMenu.addSeparator();
+    
+    QAction* highlightAction = contextMenu.addAction("🔍 Destacar Minúcias");
+    connect(highlightAction, &QAction::triggered, [this, row]() {
+        highlightAssociationInViewers(row);
+    });
+    
+    contextMenu.exec(manualMatchList->mapToGlobal(pos));
+}
+
+void FragmentComparisonDialog::highlightAssociationInViewers(int matchIndex) {
+    if (matchIndex < 0 || matchIndex >= manualMatches.size()) return;
+    
+    int frag1Idx = fragment1Combo->currentIndex();
+    int frag2Idx = fragment2Combo->currentIndex();
+    
+    if (frag1Idx < 0 || frag1Idx >= availableFragments.size() ||
+        frag2Idx < 0 || frag2Idx >= availableFragments.size()) {
+        return;
+    }
+    
+    FingerprintEnhancer::Fragment* frag1 = availableFragments[frag1Idx];
+    FingerprintEnhancer::Fragment* frag2 = availableFragments[frag2Idx];
+    
+    QPair<int, int> match = manualMatches[matchIndex];
+    
+    // Validar índices
+    if (match.first < 0 || match.first >= frag1->minutiae.size() ||
+        match.second < 0 || match.second >= frag2->minutiae.size()) {
+        return;
+    }
+    
+    // Atualizar seleção
+    selectedMinutia1 = match.first;
+    selectedMinutia2 = match.second;
+    
+    // Atualizar spinboxes
+    minutia1IndexSpinBox->setValue(match.first + 1);
+    minutia2IndexSpinBox->setValue(match.second + 1);
+    
+    // Destacar nos overlays
+    updateOverlayHighlight();
+    
+    qDebug() << QString("[MANUAL MATCH] Destacando associação: Frag1[%1] ↔ Frag2[%2]")
+        .arg(match.first + 1).arg(match.second + 1);
+}
+
+void FragmentComparisonDialog::onAutoMatchByIndex() {
+    int frag1Idx = fragment1Combo->currentIndex();
+    int frag2Idx = fragment2Combo->currentIndex();
+    
+    if (frag1Idx < 0 || frag1Idx >= availableFragments.size() ||
+        frag2Idx < 0 || frag2Idx >= availableFragments.size()) {
+        QMessageBox::warning(this, "Erro", "Selecione dois fragmentos válidos.");
+        return;
+    }
+    
+    FingerprintEnhancer::Fragment* frag1 = availableFragments[frag1Idx];
+    FingerprintEnhancer::Fragment* frag2 = availableFragments[frag2Idx];
+    
+    int minCount = qMin(frag1->minutiae.size(), frag2->minutiae.size());
+    
+    if (minCount == 0) {
+        QMessageBox::information(this, "Sem Minúcias",
+            "Um ou ambos os fragmentos não possuem minúcias.");
+        return;
+    }
+    
+    auto reply = QMessageBox::question(this, "Confirmar Associação Automática",
+        QString("Associar automaticamente %1 minúcias por índice?\n\n"
+                "Fragmento 1: %2 minúcias\n"
+                "Fragmento 2: %3 minúcias\n\n"
+                "Serão criadas %1 associações (1↔1, 2↔2, ...)")
+        .arg(minCount).arg(frag1->minutiae.size()).arg(frag2->minutiae.size()),
+        QMessageBox::Yes | QMessageBox::No);
+    
+    if (reply == QMessageBox::Yes) {
+        manualMatches.clear();
+        manualMatchList->clear();
+        
+        for (int i = 0; i < minCount; ++i) {
+            manualMatches.append(QPair<int, int>(i, i));
+            manualMatchList->addItem(QString("%1 ↔ %2").arg(i + 1).arg(i + 1));
+        }
+        
+        qDebug() << QString("[MANUAL MATCH] Associação automática: %1 pares criados").arg(minCount);
+        
+        QMessageBox::information(this, "Sucesso",
+            QString("%1 associações criadas automaticamente.").arg(minCount));
+    }
+}

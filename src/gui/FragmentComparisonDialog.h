@@ -8,10 +8,12 @@
 #include <QProgressBar>
 #include <QLineEdit>
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QGroupBox>
+#include <QListWidget>
 #include <QFuture>
 #include <QFutureWatcher>
 #include "../core/ProjectModel.h"
@@ -83,6 +85,21 @@ private slots:
     void onSwapFragments();
     void onVisualizeClicked();
     
+    // Associação manual de minúcias
+    void onAddManualMatch();
+    void onRemoveManualMatch();
+    void onClearManualMatches();
+    void onUseManualMatchesToggled(bool checked);
+    void onAutoMatchByIndex();
+    void onManualMatchListClicked(QListWidgetItem* item);
+    void onManualMatchListContextMenu(const QPoint& pos);
+    
+    // Seleção interativa
+    void onViewer1Clicked(QPoint pos, Qt::KeyboardModifiers modifiers);
+    void onViewer2Clicked(QPoint pos, Qt::KeyboardModifiers modifiers);
+    void onViewerContextMenu(const QPoint& pos, int viewerIndex);
+    void highlightAssociationInViewers(int matchIndex);
+    
     // Sincronização de overlays com zoom/scroll
     void onViewer1ZoomChanged(double factor);
     void onViewer2ZoomChanged(double factor);
@@ -133,6 +150,25 @@ private:
     QLabel* resultLRTypeLabel;
     QLabel* resultRarityLabel;
     
+    // Painel de associação manual
+    QGroupBox* manualMatchGroup;
+    QListWidget* manualMatchList;
+    QSpinBox* minutia1IndexSpinBox;
+    QSpinBox* minutia2IndexSpinBox;
+    QPushButton* addMatchButton;
+    QPushButton* autoMatchButton;
+    QPushButton* removeMatchButton;
+    QPushButton* clearMatchButton;
+    QCheckBox* useManualMatchesCheckBox;
+    QVector<QPair<int, int>> manualMatches;
+    
+    // Seleção interativa
+    int selectedMinutia1;  // -1 se nenhuma selecionada
+    int selectedMinutia2;  // -1 se nenhuma selecionada
+    void updateOverlayHighlight();
+    int findNearestMinutia(const QVector<FingerprintEnhancer::Minutia>& minutiae, 
+                           QPointF scenePos, double maxDistance = 15.0);
+    
     // Dados
     FingerprintEnhancer::Project* project;
     QVector<FingerprintEnhancer::Fragment*> availableFragments;
@@ -151,6 +187,9 @@ private:
     void clearResults();
     void displayResults(const FragmentComparisonResult& result);
     static QString getInterpretationText(double logLR);
+    
+    // Conversão de coordenadas considerando zoom/scroll
+    QPointF viewportToScene(const QPoint& viewportPos, ImageViewer* viewer);
     
     // Algoritmo de comparação (executado em thread)
     static FragmentComparisonResult compareFragments(

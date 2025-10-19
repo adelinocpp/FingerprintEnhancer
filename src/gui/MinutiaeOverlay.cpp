@@ -27,7 +27,9 @@ MinutiaeOverlay::MinutiaeOverlay(QWidget *parent)
       minutiaRadius(10),
       normalColor(255, 0, 0),      // Vermelho
       selectedColor(0, 255, 0),     // Verde
-      hoverColor(255, 255, 0)       // Amarelo
+      hoverColor(255, 255, 0),      // Amarelo
+      highlightColor(0, 200, 255),  // Azul claro para destaque
+      hasConnectionLine(false)
 {
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
     setAttribute(Qt::WA_OpaquePaintEvent, false);
