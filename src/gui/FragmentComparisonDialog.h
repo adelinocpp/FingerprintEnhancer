@@ -121,6 +121,7 @@ private:
     // Labels de resultado
     QLabel* resultLikelihoodLabel;
     QLabel* resultLogLRLabel;
+    QLabel* resultProbabilityLabel;  // P(H1|E) = LR/(1+LR)
     QLabel* resultScoreLabel;
     QLabel* resultMatchedLabel;
     QLabel* resultInterpretationLabel;

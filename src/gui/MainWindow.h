@@ -193,8 +193,6 @@ private slots:
     // Menu Base de Minúcias
     void consultMinutiaeTypes();
     void showPopulationStats();
-    void importMinutiaeData();
-    void exportMinutiaeData();
     
     // Menu Ajuda
     void showImageProcessingHelp();

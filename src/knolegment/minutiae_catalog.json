@@ -1,0 +1,984 @@
+{
+    "metadata": {
+        "version": "1.0",
+        "date": "2024-10-17",
+        "source": "Gomes et al. (2024) - Forensic Science International 364",
+        "total_minutiae": 54,
+        "sample_size": 600,
+        "description": "Comprehensive catalog of fingerprint minutiae based on Brazilian population data"
+    },
+    "minutiae_catalog": [
+        {
+            "id": 1,
+            "name_en": "Ridge ending-B",
+            "name_pt": "Término de Linha (Início)",
+            "code": "E-B",
+            "description_en": "Beginning of the line.",
+            "description_pt": "Início da linha papilar.",
+            "image_path": "cropped_images/ridge_ending_b.png",
+            "category": "Ridge Ending",
+            "classification": "Fundamental",
+            "frequency_general": 100.0,
+            "occurrence_count": 600,
+            "stats": {
+                "mean": 18.5,
+                "median": 17.0,
+                "std_dev": 7.74
+            }
+        },
+        {
+            "id": 2,
+            "name_en": "Ridge ending-C",
+            "name_pt": "Término de Linha (Fim)",
+            "code": "E-C",
+            "description_en": "End of the line.",
+            "description_pt": "Fim da linha papilar.",
+            "image_path": "cropped_images/ridge_ending_c.png",
+            "category": "Ridge Ending",
+            "classification": "Fundamental",
+            "frequency_general": 99.83,
+            "occurrence_count": 599,
+            "stats": {
+                "mean": 17.7,
+                "median": 17.0,
+                "std_dev": 8.28
+            }
+        },
+        {
+            "id": 3,
+            "name_en": "Bifurcation",
+            "name_pt": "Bifurcação",
+            "code": "B",
+            "description_en": "Point where a line splits into two. In general, the ridges show no interruptions.",
+            "description_pt": "Ponto onde uma linha se divide em duas. Em geral, as cristas não apresentam interrupções.",
+            "image_path": "cropped_images/bifurcation.png",
+            "category": "Bifurcation",
+            "classification": "Fundamental",
+            "frequency_general": 100.0,
+            "occurrence_count": 600,
+            "stats": {
+                "mean": 14.5,
+                "median": 14.0,
+                "std_dev": 6.67
+            }
+        },
+        {
+            "id": 4,
+            "name_en": "Convergence",
+            "name_pt": "Convergência",
+            "code": "C",
+            "description_en": "Point where two ridges merge into one. In general, the ridges show no interruptions.",
+            "description_pt": "Ponto onde duas cristas se fundem em uma. Em geral, as cristas não apresentam interrupções.",
+            "image_path": "cropped_images/convergence.png",
+            "category": "Convergence",
+            "classification": "Fundamental",
+            "frequency_general": 99.67,
+            "occurrence_count": 598,
+            "stats": {
+                "mean": 11.3,
+                "median": 10.0,
+                "std_dev": 6.19
+            }
+        },
+        {
+            "id": 5,
+            "name_en": "BTUS - Bifurcation tendency unite superior",
+            "name_pt": "BTUS - Bifurcação com tendência a unir superior",
+            "code": "BTUS",
+            "description_en": "Bifurcation with a tendency to unite in the superior or external branch, with a length five to ten times the width of the line, resembles the formation of an enclosure.",
+            "description_pt": "Bifurcação com tendência a unir no ramo superior ou externo, com comprimento de cinco a dez vezes a largura da linha, assemelha-se à formação de um fechamento.",
+            "image_path": "cropped_images/btus.png",
+            "category": "Bifurcation",
+            "classification": "Common",
+            "frequency_general": 30.33,
+            "occurrence_count": 182,
+            "stats": {
+                "mean": 0.39,
+                "median": 0.0,
+                "std_dev": 0.665
+            }
+        },
+        {
+            "id": 6,
+            "name_en": "BTUI - Bifurcation tendency unite inferior",
+            "name_pt": "BTUI - Bifurcação com tendência a unir inferior",
+            "code": "BTUI",
+            "description_en": "Bifurcation with a tendency to unite in the inferior or internal branch, with a length five to ten times the width of the line, resembles the formation of an enclosure.",
+            "description_pt": "Bifurcação com tendência a unir no ramo inferior ou interno, com comprimento de cinco a dez vezes a largura da linha, assemelha-se à formação de um fechamento.",
+            "image_path": "cropped_images/btui.png",
+            "category": "Bifurcation",
+            "classification": "Common",
+            "frequency_general": 27.67,
+            "occurrence_count": 165,
+            "stats": {
+                "mean": 0.342,
+                "median": 0.0,
+                "std_dev": 0.617
+            }
+        },
+        {
+            "id": 7,
+            "name_en": "BTBS - Bifurcation tendency bifurcate superior",
+            "name_pt": "BTBS - Bifurcação com tendência a bifurcar superior",
+            "code": "BTBS",
+            "description_en": "Bifurcation with a tendency to bifurcate in the superior or external branch, with a length up to four times the width of the ridge, resembling a spur or a hook.",
+            "description_pt": "Bifurcação com tendência a bifurcar no ramo superior ou externo, com comprimento de até quatro vezes a largura da crista, assemelhando-se a um esporão ou gancho.",
+            "image_path": "cropped_images/btbs.png",
+            "category": "Bifurcation",
+            "classification": "Common",
+            "frequency_general": 29.5,
+            "occurrence_count": 177,
+            "stats": {
+                "mean": 0.362,
+                "median": 0.0,
+                "std_dev": 0.62
+            }
+        },
+        {
+            "id": 8,
+            "name_en": "BTBI - Bifurcation tendency bifurcate inferior",
+            "name_pt": "BTBI - Bifurcação com tendência a bifurcar inferior",
+            "code": "BTBI",
+            "description_en": "Bifurcation with a tendency to bifurcate in the inferior or internal branch, with a length up to four times the width of the ridge, resembling a spur or a hook.",
+            "description_pt": "Bifurcação com tendência a bifurcar no ramo inferior ou interno, com comprimento de até quatro vezes a largura da crista, assemelhando-se a um esporão ou gancho.",
+            "image_path": "cropped_images/btbi.png",
+            "category": "Bifurcation",
+            "classification": "Common",
+            "frequency_general": 27.0,
+            "occurrence_count": 162,
+            "stats": {
+                "mean": 0.33,
+                "median": 0.0,
+                "std_dev": 0.604
+            }
+        },
+        {
+            "id": 9,
+            "name_en": "CTUS - Convergence tendency unite superior",
+            "name_pt": "CTUS - Convergência com tendência a unir superior",
+            "code": "CTUS",
+            "description_en": "Convergence with a tendency to unite in the superior or external branch, with a length five to ten times the width of the line, resembles the formation of an enclosure.",
+            "description_pt": "Convergência com tendência a unir no ramo superior ou externo, com comprimento de cinco a dez vezes a largura da linha, assemelha-se à formação de um fechamento.",
+            "image_path": "cropped_images/ctus.png",
+            "category": "Convergence",
+            "classification": "Common",
+            "frequency_general": 21.17,
+            "occurrence_count": 127,
+            "stats": {
+                "mean": 0.242,
+                "median": 0.0,
+                "std_dev": 0.5
+            }
+        },
+        {
+            "id": 10,
+            "name_en": "CTUI - Convergence tendency unite inferior",
+            "name_pt": "CTUI - Convergência com tendência a unir inferior",
+            "code": "CTUI",
+            "description_en": "Convergence with a tendency to unite in the inferior or internal branch, with a length five to ten times the width of the line, resembles the formation of an enclosure.",
+            "description_pt": "Convergência com tendência a unir no ramo inferior ou interno, com comprimento de cinco a dez vezes a largura da linha, assemelha-se à formação de um fechamento.",
+            "image_path": "cropped_images/ctui.png",
+            "category": "Convergence",
+            "classification": "Common",
+            "frequency_general": 23.33,
+            "occurrence_count": 140,
+            "stats": {
+                "mean": 0.263,
+                "median": 0.0,
+                "std_dev": 0.508
+            }
+        },
+        {
+            "id": 11,
+            "name_en": "CTCS - Convergence tendency converge superior",
+            "name_pt": "CTCS - Convergência com tendência a convergir superior",
+            "code": "CTCS",
+            "description_en": "Convergence with a tendency to converge in the superior or external branch, with a length up to four times the width of the ridge, resembling a spur or a hook.",
+            "description_pt": "Convergência com tendência a convergir no ramo superior ou externo, com comprimento de até quatro vezes a largura da crista, assemelhando-se a um esporão ou gancho.",
+            "image_path": "cropped_images/ctcs.png",
+            "category": "Convergence",
+            "classification": "Common",
+            "frequency_general": 23.5,
+            "occurrence_count": 141,
+            "stats": {
+                "mean": 0.273,
+                "median": 0.0,
+                "std_dev": 0.531
+            }
+        },
+        {
+            "id": 12,
+            "name_en": "CTCI - Convergence tendency converge inferior",
+            "name_pt": "CTCI - Convergência com tendência a convergir inferior",
+            "code": "CTCI",
+            "description_en": "Convergence with a tendency to converge in the inferior or internal, with a length up to four times the width of the ridge, resembling a spur or a hook.",
+            "description_pt": "Convergência com tendência a convergir no ramo inferior ou interno, com comprimento de até quatro vezes a largura da crista, assemelhando-se a um esporão ou gancho.",
+            "image_path": "cropped_images/ctci.png",
+            "category": "Convergence",
+            "classification": "Common",
+            "frequency_general": 26.0,
+            "occurrence_count": 156,
+            "stats": {
+                "mean": 0.318,
+                "median": 0.0,
+                "std_dev": 0.592
+            }
+        },
+        {
+            "id": 13,
+            "name_en": "Small fragment",
+            "name_pt": "Fragmento Pequeno",
+            "code": "F-SM",
+            "description_en": "Small ridge fragment or island (from one to four times the width of the ridge).",
+            "description_pt": "Fragmento pequeno de crista ou ilha (de uma a quatro vezes a largura da crista).",
+            "image_path": "cropped_images/small_fragment.png",
+            "category": "Fragment",
+            "classification": "Common",
+            "frequency_general": 76.67,
+            "occurrence_count": 460,
+            "stats": {
+                "mean": 1.97,
+                "median": 1.0,
+                "std_dev": 2.01
+            }
+        },
+        {
+            "id": 14,
+            "name_en": "Large fragment",
+            "name_pt": "Fragmento Grande",
+            "code": "F-BG",
+            "description_en": "Large ridge fragment (from five to ten times the width of the ridge).",
+            "description_pt": "Fragmento grande de crista (de cinco a dez vezes a largura da crista).",
+            "image_path": "cropped_images/big_fragment.png",
+            "category": "Fragment",
+            "classification": "Common",
+            "frequency_general": 66.0,
+            "occurrence_count": 396,
+            "stats": {
+                "mean": 1.22,
+                "median": 1.0,
+                "std_dev": 1.28
+            }
+        },
+        {
+            "id": 15,
+            "name_en": "Point between the ridges",
+            "name_pt": "Ponto entre as cristas",
+            "code": "P-BW",
+            "description_en": "Fragment of ridge whose length and width are of a ridge. If the dimension is less than a ridge, it is classified as an incipient ridge.",
+            "description_pt": "Fragmento de crista cujo comprimento e largura são de uma crista. Se a dimensão for menor que uma crista, é classificado como crista incipiente.",
+            "image_path": "cropped_images/point_between_ridges.png",
+            "category": "Fragment",
+            "classification": "Common",
+            "frequency_general": 62.0,
+            "occurrence_count": 372,
+            "stats": {
+                "mean": 2.17,
+                "median": 1.0,
+                "std_dev": 3.25
+            }
+        },
+        {
+            "id": 16,
+            "name_en": "Point in the ridge",
+            "name_pt": "Ponto na crista",
+            "code": "P-IN",
+            "description_en": "Point at the continuity of a ridge.",
+            "description_pt": "Ponto na continuidade de uma crista.",
+            "image_path": "cropped_images/point_in_ridges.png",
+            "category": "Fragment",
+            "classification": "Common",
+            "frequency_general": 19.0,
+            "occurrence_count": 114,
+            "stats": {
+                "mean": 0.28,
+                "median": 0.0,
+                "std_dev": 0.675
+            }
+        },
+        {
+            "id": 17,
+            "name_en": "Small enclosure",
+            "name_pt": "Fechamento Pequeno",
+            "code": "EN-SM",
+            "description_en": "Occurs when a ridge forks and merges again (up to four times the width of the ridge).",
+            "description_pt": "Ocorre quando uma crista se bifurca e se funde novamente (até quatro vezes a largura da crista).",
+            "image_path": "cropped_images/small_enclosure.png",
+            "category": "Enclosure",
+            "classification": "Common",
+            "frequency_general": 54.67,
+            "occurrence_count": 328,
+            "stats": {
+                "mean": 0.9,
+                "median": 1.0,
+                "std_dev": 1.11
+            }
+        },
+        {
+            "id": 18,
+            "name_en": "Large enclosure",
+            "name_pt": "Fechamento Grande",
+            "code": "EN-BG",
+            "description_en": "Occurs when a ridge forks and merges again (from five to ten times the width of the ridge).",
+            "description_pt": "Ocorre quando uma crista se bifurca e se funde novamente (de cinco a dez vezes a largura da crista).",
+            "image_path": "cropped_images/big_enclosure.png",
+            "category": "Enclosure",
+            "classification": "Common",
+            "frequency_general": 50.33,
+            "occurrence_count": 302,
+            "stats": {
+                "mean": 0.757,
+                "median": 1.0,
+                "std_dev": 0.953
+            }
+        },
+        {
+            "id": 19,
+            "name_en": "Simple break",
+            "name_pt": "Interrupção Simples",
+            "code": "BR-SP",
+            "description_en": "Occurs when the two adjacent ridges are not modified.",
+            "description_pt": "Ocorre quando as duas cristas adjacentes não são modificadas.",
+            "image_path": "cropped_images/simple_break.png",
+            "category": "Break",
+            "classification": "Common",
+            "frequency_general": 62.5,
+            "occurrence_count": 375,
+            "stats": {
+                "mean": 2.02,
+                "median": 1.0,
+                "std_dev": 3.0
+            }
+        },
+        {
+            "id": 20,
+            "name_en": "Break with narrowing",
+            "name_pt": "Interrupção com estreitamento",
+            "code": "BR-NW",
+            "description_en": "Occurs when the two adjacent ridges narrow.",
+            "description_pt": "Ocorre quando as duas cristas adjacentes se estreitam.",
+            "image_path": "cropped_images/break_with_narrowing.png",
+            "category": "Break",
+            "classification": "Common",
+            "frequency_general": 20.0,
+            "occurrence_count": 120,
+            "stats": {
+                "mean": 0.238,
+                "median": 0.0,
+                "std_dev": 0.525
+            }
+        },
+        {
+            "id": 21,
+            "name_en": "Overlap-B",
+            "name_pt": "Sobreposição-B",
+            "code": "O-B",
+            "description_en": "When the ridge end of type B is above the ridge end of type C.",
+            "description_pt": "Quando a extremidade de crista tipo B está acima da extremidade de crista tipo C.",
+            "image_path": "cropped_images/overlap_b.png",
+            "category": "Overlap",
+            "classification": "Common",
+            "frequency_general": 46.5,
+            "occurrence_count": 279,
+            "stats": {
+                "mean": 0.713,
+                "median": 0.0,
+                "std_dev": 0.948
+            }
+        },
+        {
+            "id": 22,
+            "name_en": "Overlap-C",
+            "name_pt": "Sobreposição-C",
+            "code": "O-C",
+            "description_en": "When the ridge end of type C is above the ridge end of type B.",
+            "description_pt": "Quando a extremidade de crista tipo C está acima da extremidade de crista tipo B.",
+            "image_path": "cropped_images/overlap_c.png",
+            "category": "Overlap",
+            "classification": "Common",
+            "frequency_general": 47.0,
+            "occurrence_count": 282,
+            "stats": {
+                "mean": 0.733,
+                "median": 0.0,
+                "std_dev": 0.987
+            }
+        },
+        {
+            "id": 23,
+            "name_en": "Crossbar-B",
+            "name_pt": "Barra Transversal-B",
+            "code": "CR-B",
+            "description_en": "When the ridge end of type B is above the ridge end of type C.",
+            "description_pt": "Quando a extremidade de crista tipo B está acima da extremidade de crista tipo C.",
+            "image_path": "cropped_images/crossbar_b.png",
+            "category": "Crossbar",
+            "classification": "Common",
+            "frequency_general": 38.33,
+            "occurrence_count": 230,
+            "stats": {
+                "mean": 0.562,
+                "median": 0.0,
+                "std_dev": 0.9
+            }
+        },
+        {
+            "id": 24,
+            "name_en": "Crossbar-C",
+            "name_pt": "Barra Transversal-C",
+            "code": "CR-C",
+            "description_en": "When the ridge end of type C is above the ridge end of type B.",
+            "description_pt": "Quando a extremidade de crista tipo C está acima da extremidade de crista tipo B.",
+            "image_path": "cropped_images/crossbar_c.png",
+            "category": "Crossbar",
+            "classification": "Common",
+            "frequency_general": 40.5,
+            "occurrence_count": 243,
+            "stats": {
+                "mean": 0.528,
+                "median": 0.0,
+                "std_dev": 0.762
+            }
+        },
+        {
+            "id": 25,
+            "name_en": "Bridge-B",
+            "name_pt": "Ponte-B",
+            "code": "BD-B",
+            "description_en": "If the bifurcation is above the convergence.",
+            "description_pt": "Se a bifurcação está acima da convergência.",
+            "image_path": "cropped_images/bridge_b.png",
+            "category": "Bridge",
+            "classification": "Common",
+            "frequency_general": 35.5,
+            "occurrence_count": 213,
+            "stats": {
+                "mean": 0.457,
+                "median": 0.0,
+                "std_dev": 0.69
+            }
+        },
+        {
+            "id": 26,
+            "name_en": "Bridge-C",
+            "name_pt": "Ponte-C",
+            "code": "BD-C",
+            "description_en": "If the convergence is above the bifurcation.",
+            "description_pt": "Se a convergência está acima da bifurcação.",
+            "image_path": "cropped_images/bridge_c.png",
+            "category": "Bridge",
+            "classification": "Common",
+            "frequency_general": 40.5,
+            "occurrence_count": 243,
+            "stats": {
+                "mean": 0.528,
+                "median": 0.0,
+                "std_dev": 0.762
+            }
+        },
+        {
+            "id": 27,
+            "name_en": "Simple opposite bifurcation",
+            "name_pt": "Bifurcação oposta simples",
+            "code": "OB-SP",
+            "description_en": "When the convergence and bifurcation are separated by up to one island (up to four times the width of the line).",
+            "description_pt": "Quando a convergência e a bifurcação estão separadas por até uma ilha (até quatro vezes a largura da linha).",
+            "image_path": "cropped_images/opposite_bifurcations.png",
+            "category": "Opposite Bifurcation",
+            "classification": "Common",
+            "frequency_general": 16.33,
+            "occurrence_count": 98,
+            "stats": {
+                "mean": 0.198,
+                "median": 0.0,
+                "std_dev": 0.493
+            }
+        },
+        {
+            "id": 28,
+            "name_en": "Spaced opposite bifurcation",
+            "name_pt": "Bifurcação oposta espaçada",
+            "code": "OB-SP",
+            "description_en": "When the convergence and bifurcation are separated by up to one island (up to four times the width of the line).",
+            "description_pt": "Quando a convergência e a bifurcação estão separadas por até uma ilha (até quatro vezes a largura da linha).",
+            "image_path": "cropped_images/opposite_bifurcations_spaced.png",
+            "category": "Opposite Bifurcation",
+            "classification": "Common",
+            "frequency_general": 12.0,
+            "occurrence_count": 72,
+            "stats": {
+                "mean": 0.138,
+                "median": 0.0,
+                "std_dev": 0.399
+            }
+        },
+        {
+            "id": 29,
+            "name_en": "Opposite bifurcation secant type B",
+            "name_pt": "Bifurcação oposta secante tipo B",
+            "code": "OB-SB",
+            "description_en": "The respective formation of an enclosure with conjugate bifurcation (simple or varied) is observed.",
+            "description_pt": "Observa-se a respectiva formação de um fechamento com bifurcação conjugada (simples ou variada).",
+            "image_path": "cropped_images/opposite_bifurcations_secant_b.png",
+            "category": "Opposite Bifurcation",
+            "classification": "Rare",
+            "frequency_general": 6.67,
+            "occurrence_count": 40,
+            "stats": {
+                "mean": 0.07,
+                "median": 0.0,
+                "std_dev": 0.268
+            }
+        },
+        {
+            "id": 30,
+            "name_en": "Opposite bifurcation secant type C",
+            "name_pt": "Bifurcação oposta secante tipo C",
+            "code": "OB-SC",
+            "description_en": "The respective formation of a convergence (simple or varied) with conjugate enclosure is observed.",
+            "description_pt": "Observa-se a respectiva formação de uma convergência (simples ou variada) com fechamento conjugado.",
+            "image_path": "cropped_images/opposite_bifurcations_secant_c.png",
+            "category": "Opposite Bifurcation",
+            "classification": "Rare",
+            "frequency_general": 5.67,
+            "occurrence_count": 34,
+            "stats": {
+                "mean": 0.06,
+                "median": 0.0,
+                "std_dev": 0.251
+            }
+        },
+        {
+            "id": 31,
+            "name_en": "Dock-B",
+            "name_pt": "Encaixe-B",
+            "code": "D-B",
+            "description_en": "When, from the left side, one ridge ending enters between two others.",
+            "description_pt": "Quando, do lado esquerdo, uma extremidade de crista entra entre duas outras.",
+            "image_path": "cropped_images/dock_b.png",
+            "category": "Dock",
+            "classification": "Common",
+            "frequency_general": 17.0,
+            "occurrence_count": 102,
+            "stats": {
+                "mean": 0.245,
+                "median": 0.0,
+                "std_dev": 0.64
+            }
+        },
+        {
+            "id": 32,
+            "name_en": "Dock-C",
+            "name_pt": "Encaixe-C",
+            "code": "D-C",
+            "description_en": "When, from the right side, one ridge ending enters between two others.",
+            "description_pt": "Quando, do lado direito, uma extremidade de crista entra entre duas outras.",
+            "image_path": "cropped_images/dock_c.png",
+            "category": "Dock",
+            "classification": "Common",
+            "frequency_general": 11.83,
+            "occurrence_count": 71,
+            "stats": {
+                "mean": 0.155,
+                "median": 0.0,
+                "std_dev": 0.501
+            }
+        },
+        {
+            "id": 33,
+            "name_en": "Double bifurcation",
+            "name_pt": "Bifurcação Dupla",
+            "code": "DB-B",
+            "description_en": "Occurs when a ridge splits into three others. The distance between the two bifurcations is up to an island (four times the width of the ridge).",
+            "description_pt": "Ocorre quando uma crista se divide em três outras. A distância entre as duas bifurcações é de até uma ilha (quatro vezes a largura da crista).",
+            "image_path": "cropped_images/double_bifurcation.png",
+            "category": "Bifurcation",
+            "classification": "Rare",
+            "frequency_general": 15.17,
+            "occurrence_count": 91,
+            "stats": {
+                "mean": 0.187,
+                "median": 0.0,
+                "std_dev": 0.482
+            }
+        },
+        {
+            "id": 34,
+            "name_en": "Double convergence",
+            "name_pt": "Convergência Dupla",
+            "code": "DB-C",
+            "description_en": "Occurs when three ridges merge into one. The distance between the two confluence points is up to an island (four times the width of the ridge).",
+            "description_pt": "Ocorre quando três cristas se fundem em uma. A distância entre os dois pontos de confluência é de até uma ilha (quatro vezes a largura da crista).",
+            "image_path": "cropped_images/double_convergence.png",
+            "category": "Convergence",
+            "classification": "Rare",
+            "frequency_general": 10.5,
+            "occurrence_count": 63,
+            "stats": {
+                "mean": 0.115,
+                "median": 0.0,
+                "std_dev": 0.349
+            }
+        },
+        {
+            "id": 35,
+            "name_en": "Trifurcation-B",
+            "name_pt": "Trifurcação-B",
+            "code": "TF-B",
+            "description_en": "A particular case of double bifurcation. The three ridges split or merge regularly, forming a trident.",
+            "description_pt": "Um caso particular de bifurcação dupla. As três cristas se dividem ou se fundem regularmente, formando um tridente.",
+            "image_path": "cropped_images/trifurcation_b.png",
+            "category": "Trifurcation",
+            "classification": "Rare",
+            "frequency_general": 4.0,
+            "occurrence_count": 24,
+            "stats": {
+                "mean": 0.04,
+                "median": 0.0,
+                "std_dev": 0.196
+            }
+        },
+        {
+            "id": 36,
+            "name_en": "Trifurcation-C",
+            "name_pt": "Trifurcação-C",
+            "code": "TF-C",
+            "description_en": "A particular case of double convergence. The three ridges split or merge regularly, forming a trident.",
+            "description_pt": "Um caso particular de convergência dupla. As três cristas se dividem ou se fundem regularmente, formando um tridente.",
+            "image_path": "cropped_images/trifurcation_c.png",
+            "category": "Trifurcation",
+            "classification": "Rare",
+            "frequency_general": 1.5,
+            "occurrence_count": 9,
+            "stats": {
+                "mean": 0.015,
+                "median": 0.0,
+                "std_dev": 0.122
+            }
+        },
+        {
+            "id": 37,
+            "name_en": "M-B",
+            "name_pt": "M-B",
+            "code": "M-B",
+            "description_en": "Characterized by three fusion points of two bifurcations and a convergence, which presents a pattern like the letter M. The fusion points can be up to an island apart (up to four times the width of the line).",
+            "description_pt": "Caracterizada por três pontos de fusão de duas bifurcações e uma convergência, que apresenta um padrão semelhante à letra M. Os pontos de fusão podem estar a até uma ilha de distância (até quatro vezes a largura da linha).",
+            "image_path": "cropped_images/m_b.png",
+            "category": "M",
+            "classification": "Rare",
+            "frequency_general": 8.0,
+            "occurrence_count": 48,
+            "stats": {
+                "mean": 0.102,
+                "median": 0.0,
+                "std_dev": 0.376
+            }
+        },
+        {
+            "id": 38,
+            "name_en": "M-C",
+            "name_pt": "M-C",
+            "code": "M-C",
+            "description_en": "Characterized by three fusion points of two bifurcations and a convergence, which presents a pattern like the letter M. The fusion points can be up to an island apart (up to four times the width of the line).",
+            "description_pt": "Caracterizada por três pontos de fusão de duas bifurcações e uma convergência, que apresenta um padrão semelhante à letra M. Os pontos de fusão podem estar a até uma ilha de distância (até quatro vezes a largura da linha).",
+            "image_path": "cropped_images/m_b.png",
+            "category": "M",
+            "classification": "Rare",
+            "frequency_general": 6.67,
+            "occurrence_count": 40,
+            "stats": {
+                "mean": 0.077,
+                "median": 0.0,
+                "std_dev": 0.307
+            }
+        },
+        {
+            "id": 39,
+            "name_en": "Return-B",
+            "name_pt": "Retorno-B",
+            "code": "R-B",
+            "description_en": "Ridge, which does not belong to a core and which returns in its flow direction, when directed to the right.",
+            "description_pt": "Crista, que não pertence a um núcleo e que retorna em sua direção de fluxo, quando direcionada para a direita.",
+            "image_path": "cropped_images/return_b.png",
+            "category": "Return",
+            "classification": "Rare",
+            "frequency_general": 4.17,
+            "occurrence_count": 25,
+            "stats": {
+                "mean": 0.042,
+                "median": 0.0,
+                "std_dev": 0.2
+            }
+        },
+        {
+            "id": 40,
+            "name_en": "Return-C",
+            "name_pt": "Retorno-C",
+            "code": "R-C",
+            "description_en": "Ridge, which does not belong to a core and which returns in its flow direction, when directed to the left.",
+            "description_pt": "Crista, que não pertence a um núcleo e que retorna em sua direção de fluxo, quando direcionada para a esquerda.",
+            "image_path": "cropped_images/return_c.png",
+            "category": "Return",
+            "classification": "Rare",
+            "frequency_general": 6.5,
+            "occurrence_count": 39,
+            "stats": {
+                "mean": 0.07,
+                "median": 0.0,
+                "std_dev": 0.28
+            }
+        },
+        {
+            "id": 41,
+            "name_en": "Appendage",
+            "name_pt": "Apêndice",
+            "code": "A",
+            "description_en": "Minutia formed by joining a ridge or ridge fragment into a loop. The fusion can occur either internally or externally.",
+            "description_pt": "Minúcia formada pela junção de uma crista ou fragmento de crista em um loop. A fusão pode ocorrer interna ou externamente.",
+            "image_path": "cropped_images/appendage.png",
+            "category": "Appendage",
+            "classification": "Common",
+            "frequency_general": 23.67,
+            "occurrence_count": 142,
+            "stats": {
+                "mean": 0.24,
+                "median": 0.0,
+                "std_dev": 0.435
+            }
+        },
+        {
+            "id": 42,
+            "name_en": "Anastomosis",
+            "name_pt": "Anastomose",
+            "code": "An",
+            "description_en": "Small ridge fragment (island or up to four times the width of a thread) that connects one loop to another more internal one by the apex.",
+            "description_pt": "Pequeno fragmento de crista (ilha ou até quatro vezes a largura de um fio) que conecta um loop a outro mais interno pelo ápice.",
+            "image_path": "cropped_images/anastomosis.png",
+            "category": "Appendage",
+            "classification": "Rare",
+            "frequency_general": 7.67,
+            "occurrence_count": 46,
+            "stats": {
+                "mean": 0.083,
+                "median": 0.0,
+                "std_dev": 0.3
+            }
+        },
+        {
+            "id": 43,
+            "name_en": "Needle-B",
+            "name_pt": "Agulha-B",
+            "code": "N-B",
+            "description_en": "Ridge that begins with an enclosure.",
+            "description_pt": "Crista que começa com um fechamento.",
+            "image_path": "cropped_images/needle_b.png",
+            "category": "Needle",
+            "classification": "Rare",
+            "frequency_general": 2.33,
+            "occurrence_count": 14,
+            "stats": {
+                "mean": 0.023,
+                "median": 0.0,
+                "std_dev": 0.151
+            }
+        },
+        {
+            "id": 44,
+            "name_en": "Needle-C",
+            "name_pt": "Agulha-C",
+            "code": "N-C",
+            "description_en": "Ridge that ends with an enclosure.",
+            "description_pt": "Crista que termina com um fechamento.",
+            "image_path": "cropped_images/needle_c.png",
+            "category": "Needle",
+            "classification": "Rare",
+            "frequency_general": 1.17,
+            "occurrence_count": 7,
+            "stats": {
+                "mean": 0.012,
+                "median": 0.0,
+                "std_dev": 0.107
+            }
+        },
+        {
+            "id": 45,
+            "name_en": "Numerical",
+            "name_pt": "Numérico",
+            "code": "NM",
+            "description_en": "Formations, in any orientation, of numerical figures.",
+            "description_pt": "Formações, em qualquer orientação, de figuras numéricas.",
+            "image_path": "cropped_images/numerical.png",
+            "category": "Numerical",
+            "classification": "Rare",
+            "frequency_general": 1.67,
+            "occurrence_count": 10,
+            "stats": {
+                "mean": 0.018,
+                "median": 0.0,
+                "std_dev": 0.146
+            }
+        },
+        {
+            "id": 46,
+            "name_en": "Tripod",
+            "name_pt": "Tripé",
+            "code": "TP",
+            "description_en": "Three ridges (or fragments), in the deltic region or not, with practically at the same angle to each other (~120°). Each ridge (or fragment) length doesn't need to be the same.",
+            "description_pt": "Três cristas (ou fragmentos), na região déltica ou não, com praticamente o mesmo ângulo entre si (~120°). O comprimento de cada crista (ou fragmento) não precisa ser o mesmo.",
+            "image_path": "cropped_images/tripod.png",
+            "category": "Tripod",
+            "classification": "Common",
+            "frequency_general": 55.5,
+            "occurrence_count": 333,
+            "stats": {
+                "mean": 0.687,
+                "median": 1.0,
+                "std_dev": 0.692
+            }
+        },
+        {
+            "id": 47,
+            "name_en": "Emboque-BS",
+            "name_pt": "Emboque-BS",
+            "code": "EB-BS",
+            "description_en": "Ridge ending in an enclosure's superior part.",
+            "description_pt": "Extremidade de crista na parte superior de um fechamento.",
+            "image_path": "cropped_images/emboque_bs.png",
+            "category": "Emboque",
+            "classification": "Rare",
+            "frequency_general": 3.83,
+            "occurrence_count": 23,
+            "stats": {
+                "mean": 0.038,
+                "median": 0.0,
+                "std_dev": 0.192
+            }
+        },
+        {
+            "id": 48,
+            "name_en": "Emboque-BI",
+            "name_pt": "Emboque-BI",
+            "code": "EB-BI",
+            "description_en": "Ridge ending in an enclosure's inferior part.",
+            "description_pt": "Extremidade de crista na parte inferior de um fechamento.",
+            "image_path": "cropped_images/emboque_bi.png",
+            "category": "Emboque",
+            "classification": "Rare",
+            "frequency_general": 2.67,
+            "occurrence_count": 16,
+            "stats": {
+                "mean": 0.027,
+                "median": 0.0,
+                "std_dev": 0.161
+            }
+        },
+        {
+            "id": 49,
+            "name_en": "Emboque-CS",
+            "name_pt": "Emboque-CS",
+            "code": "EB-CS",
+            "description_en": "Incidence of the ridge ending C in the superior part of an enclosure.",
+            "description_pt": "Incidência da extremidade de crista C na parte superior de um fechamento.",
+            "image_path": "cropped_images/emboque_cs.png",
+            "category": "Emboque",
+            "classification": "Rare",
+            "frequency_general": 6.17,
+            "occurrence_count": 37,
+            "stats": {
+                "mean": 0.062,
+                "median": 0.0,
+                "std_dev": 0.241
+            }
+        },
+        {
+            "id": 50,
+            "name_en": "Emboque-CI",
+            "name_pt": "Emboque-CI",
+            "code": "EB-CI",
+            "description_en": "Incidence of the ridge ending C in the inferior part of an enclosure.",
+            "description_pt": "Incidência da extremidade de crista C na parte inferior de um fechamento.",
+            "image_path": "cropped_images/emboque_ci.png",
+            "category": "Emboque",
+            "classification": "Rare",
+            "frequency_general": 1.5,
+            "occurrence_count": 9,
+            "stats": {
+                "mean": 0.015,
+                "median": 0.0,
+                "std_dev": 0.122
+            }
+        },
+        {
+            "id": 51,
+            "name_en": "Simple conjugation",
+            "name_pt": "Conjugação Simples",
+            "code": "CJ-S",
+            "description_en": "Association of two complex minutiae distant up to an island or that share adjacent parts.",
+            "description_pt": "Associação de duas minúcias complexas distantes até uma ilha ou que compartilham partes adjacentes.",
+            "image_path": "cropped_images/simple_conjugation.png",
+            "category": "Conjugation",
+            "classification": "Common",
+            "frequency_general": 53.0,
+            "occurrence_count": 318,
+            "stats": {
+                "mean": 0.9,
+                "median": 1.0,
+                "std_dev": 1.16
+            }
+        },
+        {
+            "id": 52,
+            "name_en": "Compound conjugation",
+            "name_pt": "Conjugação Composta",
+            "code": "CJ-C",
+            "description_en": "Association of three or more complex minutiae distant up to an island or that share adjacent parts.",
+            "description_pt": "Associação de três ou mais minúcias complexas distantes até uma ilha ou que compartilham partes adjacentes.",
+            "image_path": "cropped_images/compound_conjugation.png",
+            "category": "Conjugation",
+            "classification": "Common",
+            "frequency_general": 25.17,
+            "occurrence_count": 151,
+            "stats": {
+                "mean": 0.34,
+                "median": 0.0,
+                "std_dev": 0.738
+            }
+        },
+        {
+            "id": 53,
+            "name_en": "Angular",
+            "name_pt": "Angular",
+            "code": "AG",
+            "description_en": "Vertex along a ridge.",
+            "description_pt": "Vértice ao longo de uma crista.",
+            "image_path": "cropped_images/angular.png",
+            "category": "Angular",
+            "classification": "Common",
+            "frequency_general": 23.83,
+            "occurrence_count": 143,
+            "stats": {
+                "mean": 0.267,
+                "median": 0.0,
+                "std_dev": 0.503
+            }
+        },
+        {
+            "id": 54,
+            "name_en": "Others minutiae",
+            "name_pt": "Outras Minúcias",
+            "code": "OM",
+            "description_en": "An undefined characteristic point.",
+            "description_pt": "Um ponto característico não definido.",
+            "image_path": "cropped_images/others_minutiae.png",
+            "category": "Other",
+            "classification": "Common",
+            "frequency_general": 28.33,
+            "occurrence_count": 170,
+            "stats": {
+                "mean": 0.42,
+                "median": 0.0,
+                "std_dev": 0.834
+            }
+        }
+    ]
+}

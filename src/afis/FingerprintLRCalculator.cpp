@@ -1,6 +1,8 @@
 #include "FingerprintLRCalculator.h"
 #include <QtMath>
 #include <QDebug>
+#include <QFile>
+#include <QTextStream>
 #include <algorithm>
 
 namespace FingerprintEnhancer {
@@ -95,8 +97,38 @@ FingerprintLRCalculator::FingerprintLRCalculator()
     : useBrazilianPriors(true)
     , rarityFactor(1.0)
     , distortionStdDev(2.0)  // pixels - modelo de distorção simplificado
+    , m_detailedLogging(false)
 {
     qDebug() << "[LR] FingerprintLRCalculator inicializado com priors brasileiros";
+}
+
+void FingerprintLRCalculator::setDetailedLogging(bool enable, const QString& logFilePath) {
+    m_detailedLogging = enable;
+    if (enable) {
+        m_logFilePath = logFilePath.isEmpty() ? "lr_calculation_debug.log" : logFilePath;
+        QFile file(m_logFilePath);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+            QTextStream out(&file);
+            out << "========================================\n";
+            out << "LR Calculation Detailed Log\n";
+            out << "========================================\n\n";
+            file.close();
+        }
+        qDebug() << "[LR] Logging detalhado habilitado:" << m_logFilePath;
+    } else {
+        qDebug() << "[LR] Logging detalhado desabilitado";
+    }
+}
+
+void FingerprintLRCalculator::logToFile(const QString& message) {
+    if (!m_detailedLogging || m_logFilePath.isEmpty()) return;
+    
+    QFile file(m_logFilePath);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << message << "\n";
+        file.close();
+    }
 }
 
 // ==================== MÉTODOS PRINCIPAIS ====================
@@ -161,6 +193,13 @@ LRResult FingerprintLRCalculator::calculateLR(
     
     // ===== LR TOTAL =====
     result.lr_total = result.lr_shape * result.lr_direction * result.lr_type * (1.0 / result.p_v_hd);
+    
+    qDebug() << QString("[LR DEBUG] Antes de limitar: lr_shape=%.6e, lr_dir=%.6e, lr_type=%.6e")
+        .arg(result.lr_shape).arg(result.lr_direction).arg(result.lr_type);
+    qDebug() << QString("[LR DEBUG] p_v_hd=%.6e, (1/p_v_hd)=%.6e")
+        .arg(result.p_v_hd).arg(1.0/result.p_v_hd);
+    qDebug() << QString("[LR DEBUG] LR_total ANTES limites = %.6e")
+        .arg(result.lr_total);
     
     // Evitar valores muito extremos
     if (result.lr_total > 1e15) result.lr_total = 1e15;
@@ -279,8 +318,8 @@ ShapeFeatures FingerprintLRCalculator::extractShapeFeatures(const QVector<Minuti
         features.aspectRatios.append(aspectRatios[idx]);
     }
     
-    qDebug() << QString("[LR-Shape] Extraídos %1 triângulos, centroide=(%.1f, %.1f)")
-        .arg(k).arg(features.centroid.x()).arg(features.centroid.y());
+    qDebug() << QString("[LR-Shape] Extraídos %1 triângulos, centroide=(%2, %3)")
+        .arg(k).arg(features.centroid.x(), 0, 'f', 1).arg(features.centroid.y(), 0, 'f', 1);
     
     return features;
 }
@@ -375,9 +414,27 @@ double FingerprintLRCalculator::computeLRShape(
     
     double lr_product = 1.0;
     
+    qDebug() << QString("[LR-Shape DEBUG] Comparando %1 triângulos").arg(k);
+    qDebug() << QString("[LR-Shape DEBUG] sigma_hp=%1, sigma_hd=%2")
+        .arg(distortionStdDev, 0, 'f', 2)
+        .arg(5.0 * distortionStdDev, 0, 'f', 2);
+    
+    // Verificar se form factors são idênticos (fragmento duplicado)
+    bool identical = true;
+    for (int i = 0; i < k; ++i) {
+        if (std::abs(observed.formFactors[i] - reference.formFactors[i]) > 1e-6) {
+            identical = false;
+            break;
+        }
+    }
+    if (identical) {
+        qDebug() << "[LR-Shape WARNING] Form factors idênticos detectados! Fragmentos duplicados?";
+    }
+    
     for (int i = 0; i < k; ++i) {
         double y = observed.formFactors[i];
         double x = reference.formFactors[i];
+        double diff = std::abs(y - x);
         
         // NUMERADOR: p(y | x, Hp, v=1)
         // Modelo de distorção: y ~ N(x, σ_distortion)
@@ -396,6 +453,16 @@ double FingerprintLRCalculator::computeLRShape(
         
         double lr_i = p_numerator / p_denominator;
         
+        // Log detalhado todos os triângulos
+        qDebug() << QString("[LR-Shape] Tri[%1]: y=%2, x=%3, diff=%4, P(Hp)=%5, P(Hd)=%6, LR_i=%7")
+            .arg(i)
+            .arg(y, 0, 'f', 6)
+            .arg(x, 0, 'f', 6)
+            .arg(diff, 0, 'e', 2)
+            .arg(p_numerator, 0, 'e', 2)
+            .arg(p_denominator, 0, 'e', 2)
+            .arg(lr_i, 0, 'e', 2);
+        
         // Limitar valores extremos por triângulo
         if (lr_i > 1e6) lr_i = 1e6;
         if (lr_i < 1e-6) lr_i = 1e-6;
@@ -403,7 +470,8 @@ double FingerprintLRCalculator::computeLRShape(
         lr_product *= lr_i;
     }
     
-    qDebug() << QString("[LR-Shape] LR_shape = %.2e (k=%1 triângulos)").arg(k).arg(lr_product);
+    qDebug() << QString("[LR-Shape] LR_shape = %2 (k=%1 triângulos)")
+        .arg(k).arg(lr_product, 0, 'e', 2);
     
     return lr_product;
 }
@@ -447,7 +515,8 @@ double FingerprintLRCalculator::computeLRDirection(
         lr_product *= lr_i;
     }
     
-    qDebug() << QString("[LR-Direction] LR_direction = %.2e (k=%1 minúcias)").arg(k).arg(lr_product);
+    qDebug() << QString("[LR-Direction] LR_direction = %2 (k=%1 minúcias)")
+        .arg(k).arg(lr_product, 0, 'e', 2);
     
     return lr_product;
 }
@@ -493,7 +562,8 @@ double FingerprintLRCalculator::computeLRType(
         lr_product *= lr_i;
     }
     
-    qDebug() << QString("[LR-Type] LR_type = %.2e (k=%1 minúcias)").arg(k).arg(lr_product);
+    qDebug() << QString("[LR-Type] LR_type = %2 (k=%1 minúcias)")
+        .arg(k).arg(lr_product, 0, 'e', 2);
     
     return lr_product;
 }

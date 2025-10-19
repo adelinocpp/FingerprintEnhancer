@@ -17,6 +17,9 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include "FragmentRegionsOverlay.h"
 #include "FragmentComparisonDialog.h"
 #include "AboutDialog.h"
+#include "MinutiaeQueryDialog.h"
+#include "PopulationStatsDialog.h"
+#include "../knolegment/MinutiaeCatalog.h"
 #include "../core/TranslationManager_Simple.h"
 #include "../core/ImageState.h"
 #include <QtWidgets/QApplication>
@@ -41,6 +44,11 @@ Q_LOGGING_CATEGORY(mainwindow, "mainwindow")
 #include <QtCore/QJsonObject>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
+#include <QtPrintSupport/QPrinter>
+#include <QtPrintSupport/QPrintDialog>
+#include <QtGui/QPainter>
+#include <QtGui/QTextDocument>
+#include <QtGui/QPageSize>
 #include <cmath>
 
 #ifndef M_PI
@@ -141,7 +149,7 @@ void MainWindow::createMenus() {
     fileMenu->addAction("Abrir &Imagem...", this, &MainWindow::openImage, QKeySequence("Ctrl+O"));
     fileMenu->addAction("Salvar I&magem...", this, &MainWindow::saveImage, QKeySequence("Ctrl+M"));
     fileMenu->addSeparator();
-    fileMenu->addAction("Exportar &Relatório...", this, &MainWindow::exportReport, QKeySequence("Ctrl+R"));
+    //fileMenu->addAction("Exportar &Relatório...", this, &MainWindow::exportReport, QKeySequence("Ctrl+R"));
     fileMenu->addSeparator();
     fileMenu->addAction("&Sair", this, &MainWindow::exitApplication, QKeySequence::Quit);
 
@@ -257,20 +265,17 @@ void MainWindow::createMenus() {
 
     // Menu AFIS
     QMenu *afisMenu = menuBar()->addMenu("AF&IS");
-    afisMenu->addAction("&Carregar Base de Dados...", this, &MainWindow::loadAFISDatabase, QKeySequence("Ctrl+Shift+D"));
-    afisMenu->addAction("&Identificar Impressão Digital", this, &MainWindow::identifyFingerprint, QKeySequence("Ctrl+Shift+I"));
     afisMenu->addAction("&Verificar 1:1...", this, &MainWindow::verifyFingerprint);
-    afisMenu->addSeparator();
+    afisMenu->addAction("&Identificar Impressão Digital", this, &MainWindow::identifyFingerprint, QKeySequence("Ctrl+Shift+I"));
+    // afisMenu->addAction("&Carregar Base de Dados...", this, &MainWindow::loadAFISDatabase, QKeySequence("Ctrl+Shift+D"));
+        afisMenu->addSeparator();
     afisMenu->addAction("&Configurar Matching...", this, &MainWindow::configureAFISMatching);
-    afisMenu->addAction("&Ver Resultados", this, &MainWindow::showAFISResults);
+    //afisMenu->addAction("&Ver Resultados", this, &MainWindow::showAFISResults);
     
     // Menu Base de Minúcias
     QMenu *minutiaeDBMenu = menuBar()->addMenu("&Base de Minúcias");
     minutiaeDBMenu->addAction("&Consultar Tipos de Minúcias...", this, &MainWindow::consultMinutiaeTypes);
     minutiaeDBMenu->addAction("&Estatísticas Populacionais...", this, &MainWindow::showPopulationStats);
-    minutiaeDBMenu->addSeparator();
-    minutiaeDBMenu->addAction("&Importar Dados...", this, &MainWindow::importMinutiaeData);
-    minutiaeDBMenu->addAction("&Exportar Dados...", this, &MainWindow::exportMinutiaeData);
     
     // Menu Ajuda
     QMenu *helpMenu = menuBar()->addMenu("Aj&uda");
@@ -4918,6 +4923,9 @@ void MainWindow::onDuplicateFragmentRequested(const QString& fragmentId) {
     newFragment.currentFlippedVertical = originalFrag->currentFlippedVertical;
     newFragment.geometricTransforms = originalFrag->geometricTransforms;
     
+    // Copiar escala calibrada
+    newFragment.pixelsPerMM = originalFrag->pixelsPerMM;
+    
     // Copiar minúcias
     for (const auto& minutia : originalFrag->minutiae) {
         FingerprintEnhancer::Minutia newMinutia = minutia;
@@ -5437,41 +5445,13 @@ void MainWindow::applyGlobalDisplaySettings() {
 // ==================== MENU BASE DE MINÚCIAS ====================
 
 void MainWindow::consultMinutiaeTypes() {
-    // TODO: Implementar consulta de tipos de minúcias
-    QMessageBox::information(this, "Base de Minúcias",
-        "Funcionalidade de consulta de tipos de minúcias será implementada em breve.\n\n"
-        "Esta funcionalidade permitirá consultar o inventário de 54 tipos de minúcias "
-        "conforme Gomes et al. (2024).");
+    MinutiaeQueryDialog dialog(this);
+    dialog.exec();
 }
 
 void MainWindow::showPopulationStats() {
-    // TODO: Implementar visualização de estatísticas populacionais
-    QMessageBox::information(this, "Estatísticas Populacionais",
-        "Funcionalidade de estatísticas populacionais será implementada em breve.\n\n"
-        "Esta funcionalidade exibirá:\n"
-        "• Frequências de tipos de minúcias (população brasileira)\n"
-        "• Médias por padrão geral (arch, loop, whorl)\n"
-        "• Matriz de confusão de examinadores");
-}
-
-void MainWindow::importMinutiaeData() {
-    // TODO: Implementar importação de dados
-    QMessageBox::information(this, "Importar Dados",
-        "Funcionalidade de importação será implementada em breve.\n\n"
-        "Formatos suportados:\n"
-        "• CSV com estatísticas populacionais\n"
-        "• JSON com tipos de minúcias\n"
-        "• Dados de estudos científicos");
-}
-
-void MainWindow::exportMinutiaeData() {
-    // TODO: Implementar exportação de dados
-    QMessageBox::information(this, "Exportar Dados",
-        "Funcionalidade de exportação será implementada em breve.\n\n"
-        "Permitirá exportar:\n"
-        "• Minúcias marcadas do projeto\n"
-        "• Estatísticas calculadas\n"
-        "• Resultados de comparações");
+    PopulationStatsDialog dialog(this);
+    dialog.exec();
 }
 
 // ==================== MENU AJUDA ====================

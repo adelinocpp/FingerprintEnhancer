@@ -63,16 +63,16 @@ void AboutDialog::setupUI() {
     
     QLabel* contactLabel = new QLabel(
         "<b>Desenvolvedor Principal:</b><br>"
-        "Nome: [A definir]<br>"
+        "Nome: Dr. Adelino Pinheiro Silva<br>"
         "<br>"
         "<b>Instituição:</b><br>"
-        "[Instituição]<br>"
+        "Instituto de Criminalística de Minas Gerais<br>"
         "<br>"
         "<b>E-mail:</b><br>"
-        "<a href='mailto:contato@exemplo.com'>contato@exemplo.com</a><br>"
+        "<a href='mailto:adelinocpp@yahoo.com'>adelinocpp@yahoo.com</a><br>"
         "<br>"
         "<b>Website:</b><br>"
-        "<a href='https://github.com/usuario/projeto'>https://github.com/usuario/projeto</a><br>"
+        "<a href='https://github.com/adelinocpp/FingerprintEnhancer'>https://github.com/adelinocpp/FingerprintEnhancer</a><br>"
     );
     contactLabel->setTextFormat(Qt::RichText);
     contactLabel->setOpenExternalLinks(true);

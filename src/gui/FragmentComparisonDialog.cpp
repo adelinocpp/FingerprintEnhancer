@@ -195,11 +195,11 @@ void FragmentComparisonDialog::setupUI() {
     // Raridade p(v=1|Hd)
     raritySpinBox = new QDoubleSpinBox();
     raritySpinBox->setRange(1e-9, 0.1);
-    raritySpinBox->setValue(0.001);  // 1 em 1000
+    raritySpinBox->setValue(0.01);  // 1 em 100 (padrão)
     raritySpinBox->setDecimals(6);
-    raritySpinBox->setSingleStep(0.0001);
+    raritySpinBox->setSingleStep(0.001);
     raritySpinBox->setToolTip("p(v=1|Hd): Probabilidade de encontrar configuração similar na população\n"
-                               "Valores típicos: 0.001 (1 em 1000) a 0.000001 (1 em 1 milhão)");
+                               "Valores típicos: 0.01 (1 em 100) a 0.000001 (1 em 1 milhão)");
     lrLayout->addRow("Raridade p(v=1|Hd):", raritySpinBox);
     
     // Padrão geral (opcional)
@@ -235,6 +235,7 @@ void FragmentComparisonDialog::setupUI() {
     
     resultLikelihoodLabel = new QLabel("LR: -");
     resultLogLRLabel = new QLabel("Log₁₀(LR): -");
+    resultProbabilityLabel = new QLabel("P(Hp|E): -");
     resultScoreLabel = new QLabel("Score: -");
     resultMatchedLabel = new QLabel("Matches: -");
     resultInterpretationLabel = new QLabel("Interpretação: -");
@@ -244,12 +245,16 @@ void FragmentComparisonDialog::setupUI() {
     resultFont.setPointSize(9);
     resultLikelihoodLabel->setFont(resultFont);
     resultLogLRLabel->setFont(resultFont);
+    resultProbabilityLabel->setFont(resultFont);
     resultScoreLabel->setFont(resultFont);
     resultMatchedLabel->setFont(resultFont);
     resultTimeLabel->setFont(resultFont);
     
     resultLikelihoodLabel->setWordWrap(true);
     resultLogLRLabel->setWordWrap(true);
+    resultProbabilityLabel->setWordWrap(true);
+    resultProbabilityLabel->setToolTip("Probabilidade posterior calculada como P(Hp|E) = LR / (1 + LR)\n"
+                                       "Assume priors iguais (50%/50%)");
     resultScoreLabel->setWordWrap(true);
     resultMatchedLabel->setWordWrap(true);
     resultTimeLabel->setWordWrap(true);
@@ -261,6 +266,7 @@ void FragmentComparisonDialog::setupUI() {
     
     resultsLayout->addWidget(resultLikelihoodLabel);
     resultsLayout->addWidget(resultLogLRLabel);
+    resultsLayout->addWidget(resultProbabilityLabel);
     resultsLayout->addWidget(resultScoreLabel);
     resultsLayout->addWidget(resultMatchedLabel);
     resultsLayout->addWidget(resultInterpretationLabel);
@@ -798,6 +804,12 @@ void FragmentComparisonDialog::displayResults(const FragmentComparisonResult& re
     // Log LR
     resultLogLRLabel->setText(QString("Log₁₀(LR): %1")
         .arg(result.logLR, 0, 'f', 2));
+    
+    // Probabilidade P(Hp|E) = LR / (1 + LR)
+    // Assume priors iguais (50%/50%)
+    double probability = result.likelihoodRatio / (1.0 + result.likelihoodRatio);
+    resultProbabilityLabel->setText(QString("P(Hp|E): %1% (priors iguais)")
+        .arg(probability * 100.0, 0, 'f', 2));
     
     // Score de similaridade
     resultScoreLabel->setText(QString("Score de Similaridade: %1%")

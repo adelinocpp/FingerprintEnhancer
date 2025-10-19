@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo circular -->
+  <circle cx="64" cy="64" r="60" fill="#1a2550" stroke="#3a5080" stroke-width="4"/>
+  
+  <!-- Impressão digital estilizada (círculos concêntricos) -->
+  <g fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.9">
+    <!-- Centro -->
+    <circle cx="64" cy="64" r="8"/>
+    
+    <!-- Anéis concêntricos -->
+    <ellipse cx="64" cy="64" rx="16" ry="14"/>
+    <ellipse cx="64" cy="64" rx="24" ry="22"/>
+    <ellipse cx="64" cy="64" rx="32" ry="30"/>
+    <ellipse cx="64" cy="64" rx="40" ry="38"/>
+    <ellipse cx="64" cy="64" rx="48" ry="46"/>
+    
+    <!-- Linhas de interrupção para simular minúcias -->
+    <path d="M 64 20 Q 64 30 64 40" stroke-linecap="round"/>
+    <path d="M 90 40 Q 85 45 80 50" stroke-linecap="round"/>
+    <path d="M 100 70 Q 95 70 90 70" stroke-linecap="round"/>
+    <path d="M 38 88 Q 42 88 46 88" stroke-linecap="round"/>
+    <path d="M 25 60 Q 30 58 35 56" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Destaque de minúcias (pontos) -->
+  <g fill="#42d4f4">
+    <circle cx="64" cy="24" r="3"/>
+    <circle cx="88" cy="42" r="3"/>
+    <circle cx="98" cy="70" r="3"/>
+    <circle cx="40" cy="90" r="3"/>
+    <circle cx="28" cy="58" r="3"/>
+  </g>
+  
+  <!-- Borda externa -->
+  <circle cx="64" cy="64" r="60" fill="none" stroke="#5080c0" stroke-width="2" opacity="0.5"/>
+</svg>

@@ -6,6 +6,9 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QPainter>
+#include <QSpinBox>
+#include <QCheckBox>
+#include <QComboBox>
 #include "../core/ProjectModel.h"
 
 /**
@@ -25,12 +28,38 @@ public:
 
 private:
     void generateVisualization();
-    void drawMinutiaMarker(QPainter& painter, const QPoint& pos, int number, const QColor& color);
+    void drawMinutiaMarker(QPainter& painter, const QPoint& pos, int number, const QColor& color, int radius = 8, int fontSize = 8);
     void drawConnectionLine(QPainter& painter, const QPoint& p1, const QPoint& p2, const QColor& color);
+    void setupUI();
+    void loadSettings();
+    void saveSettings();
+    QColor getBackgroundColor() const;
 
     QLabel* imageLabel;
     QPushButton* saveButton;
+    QPushButton* applySettingsButton;
     QPushButton* closeButton;
+    
+    // Configurações
+    QSpinBox* markerSizeSpinBox;
+    QSpinBox* fontSizeSpinBox;
+    QSpinBox* lineWidthSpinBox;
+    QCheckBox* showNumbersCheck;
+    QCheckBox* showLabelTypeCheck;
+    QCheckBox* showAnglesCheck;
+    QCheckBox* whiteBackgroundCheck;
+    QComboBox* formatComboBox;
+    QComboBox* symbolComboBox;
+    QComboBox* labelPositionComboBox;
+    QSlider* labelOpacitySlider;
+    QLabel* labelOpacityLabel;
+    QPushButton* markerColorButton;
+    QPushButton* textColorButton;
+    QPushButton* labelBgColorButton;
+    QColor markerColor;
+    QColor textColor;
+    QColor labelBgColor;
+    int labelOpacity;
     
     QPixmap visualizationPixmap;
     
@@ -43,6 +72,12 @@ private:
 
 private slots:
     void onSaveClicked();
+    void onApplySettingsClicked();
+    void onSettingsChanged();
+    void onMarkerColorClicked();
+    void onTextColorClicked();
+    void onLabelBgColorClicked();
+    void onLabelOpacityChanged(int value);
 };
 
 #endif // CORRESPONDENCEVISUALIZATIONDIALOG_H

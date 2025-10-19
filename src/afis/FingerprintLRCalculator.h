@@ -74,7 +74,7 @@ struct LRResult {
     double lr_shape = 1.0;
     double lr_direction = 1.0;
     double lr_type = 1.0;
-    double p_v_hd = 0.001;          // p(v=1|Hd) - raridade
+    double p_v_hd = 0.01;          // p(v=1|Hd) - raridade
     double lr_total = 1.0;
     
     // Logs para melhor interpretação
@@ -120,6 +120,10 @@ class FingerprintLRCalculator {
 public:
     FingerprintLRCalculator();
     ~FingerprintLRCalculator() = default;
+    
+    // Habilitar log detalhado em arquivo
+    void setDetailedLogging(bool enable, const QString& logFilePath = "");
+    bool detailedLoggingEnabled() const { return m_detailedLogging; }
     
     // ==================== MÉTODOS PRINCIPAIS ====================
     
@@ -250,6 +254,11 @@ private:
     bool useBrazilianPriors;
     double rarityFactor;          // Fator multiplicativo para p(v=1|Hd)
     double distortionStdDev;      // Desvio padrão para modelo de distorção
+    
+    // Logging detalhado
+    bool m_detailedLogging;
+    QString m_logFilePath;
+    void logToFile(const QString& message);
     
     // Funções auxiliares para cálculos estatísticos
     double gaussianPDF(double x, double mean, double stddev) const;
